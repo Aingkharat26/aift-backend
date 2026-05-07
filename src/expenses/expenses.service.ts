@@ -49,4 +49,8 @@ export class ExpensesService {
       
     return result.map(r => ({ category: r.category, total: parseFloat(r.total) }));
   }
+
+  async deleteExpense(id: number): Promise<void> {
+    await this.expensesRepository.delete(id);
+  }
 }

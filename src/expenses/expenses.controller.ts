@@ -1,4 +1,4 @@
-import { Controller, Post, Body, Get } from '@nestjs/common';
+import { Controller, Post, Body, Get, Delete, Param } from '@nestjs/common';
 import { ExpensesService } from './expenses.service';
 
 @Controller('expenses')
@@ -24,5 +24,11 @@ export class ExpensesController {
   async getSummary() {
     const data = await this.expensesService.getMonthlySummary();
     return { success: true, data };
+  }
+
+  @Delete(':id')
+  async deleteExpense(@Param('id') id: number) {
+    await this.expensesService.deleteExpense(id);
+    return { success: true };
   }
 }
