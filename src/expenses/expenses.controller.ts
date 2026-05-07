@@ -5,6 +5,7 @@ import {
   Get,
   Delete,
   Param,
+  Query,
   BadRequestException,
   InternalServerErrorException,
 } from '@nestjs/common';
@@ -39,14 +40,20 @@ export class ExpensesController {
   }
 
   @Get('daily')
-  async getDaily() {
-    const data = await this.expensesService.getDailyExpenses();
+  async getDaily(@Query('date') date?: string) {
+    const data = await this.expensesService.getDailyExpenses(date);
     return { success: true, data };
   }
 
   @Get('summary')
-  async getSummary() {
-    const data = await this.expensesService.getMonthlySummary();
+  async getSummary(
+    @Query('year') year?: string,
+    @Query('month') month?: string,
+  ) {
+    const data = await this.expensesService.getMonthlySummary(
+      year ? parseInt(year) : undefined,
+      month ? parseInt(month) : undefined,
+    );
     return { success: true, data };
   }
 

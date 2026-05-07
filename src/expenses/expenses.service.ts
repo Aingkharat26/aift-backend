@@ -23,10 +23,13 @@ export class ExpensesService {
     return this.expensesRepository.save(expense);
   }
 
-  async getDailyExpenses(): Promise<Expense[]> {
-    const startOfDay = new Date();
+  async getDailyExpenses(dateStr?: string): Promise<Expense[]> {
+    const targetDate = dateStr ? new Date(dateStr) : new Date();
+    
+    const startOfDay = new Date(targetDate);
     startOfDay.setHours(0, 0, 0, 0);
-    const endOfDay = new Date();
+    
+    const endOfDay = new Date(targetDate);
     endOfDay.setHours(23, 59, 59, 999);
 
     return this.expensesRepository.createQueryBuilder('expense')
@@ -36,14 +39,19 @@ export class ExpensesService {
       .getMany();
   }
 
-  async getMonthlySummary(): Promise<{ category: string; total: number }[]> {
+  async getMonthlySummary(year?: number, month?: number): Promise<{ category: string; total: number }[]> {
     const now = new Date();
-    const startOfMonth = new Date(now.getFullYear(), now.getMonth(), 1);
+    const targetYear = year ?? now.getFullYear();
+    const targetMonth = month !== undefined ? month - 1 : now.getMonth(); // month is 1-indexed from query, convert to 0-indexed
+    
+    const startOfMonth = new Date(targetYear, targetMonth, 1);
+    const endOfMonth = new Date(targetYear, targetMonth + 1, 0, 23, 59, 59, 999);
     
     const result = await this.expensesRepository.createQueryBuilder('expense')
       .select('expense.category', 'category')
       .addSelect('SUM(expense.amount)', 'total')
       .where('expense.date >= :startOfMonth', { startOfMonth })
+      .andWhere('expense.date <= :endOfMonth', { endOfMonth })
       .groupBy('expense.category')
       .getRawMany();
       
