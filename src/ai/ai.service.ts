@@ -35,10 +35,7 @@ export class AiService implements OnModuleInit {
   }
 
   async extractExpenseData(text: string): Promise<any> {
-    // สร้าง Label สำหรับจับเวลา โดยตัดข้อความมาแสดงสั้นๆ ใน Log
     const logLabel = `[AI Process] "${text.substring(0, 20)}${text.length > 20 ? '...' : ''}"`;
-
-    // 1. เริ่มจับเวลาใน Terminal
     console.time(logLabel);
 
     const prompt = `You are an AI Finance Tracker assistant. Your job is to extract expense information from Thai or English text.
@@ -74,23 +71,19 @@ export class AiService implements OnModuleInit {
 
         const parsedData = JSON.parse(jsonText);
 
-        // ตรวจสอบว่าผลลัพธ์เป็นขยะหรือไม่
         if (
           parsedData.action === 'invalid_input' ||
           (parsedData.amount === 0 && parsedData.item === 'unknown')
         ) {
-          // ถ้า Model นี้อ่านไม่รู้เรื่อง ให้ถือว่าเป็น Error ของการวิเคราะห์
           throw new Error('AI_COULD_NOT_UNDERSTAND');
         }
 
-        // 2. ถ้าสำเร็จจนถึงตรงนี้ ให้หยุดเวลาและแสดงผลใน Terminal
         console.timeEnd(logLabel);
         return parsedData;
       } catch (e: any) {
         const status = e?.status;
         const message = e?.message || '';
 
-        // ถ้าเป็น Error ที่เราตั้งใจโยนออกมาเอง (อ่านไม่ออก) ไม่ต้อง Retry ตัวอื่น ให้ Error ออกไปเลย
         if (message === 'AI_COULD_NOT_UNDERSTAND') {
           this.logger.error(
             `Model ${modelName} returned: AI_COULD_NOT_UNDERSTAND`,
@@ -98,7 +91,6 @@ export class AiService implements OnModuleInit {
           break;
         }
 
-        // ถ้าเป็น Error จากระบบ (429, 404, 500) ให้ลอง Model ตัวถัดไป
         const isRetryable =
           [429, 404, 500].includes(status) ||
           message.includes('429') ||
@@ -117,9 +109,63 @@ export class AiService implements OnModuleInit {
       }
     }
 
-    // 3. ถ้าล้มเหลวทุก Model หรือโดน break ออกมา
-    console.timeEnd(logLabel); // ต้องปิด TimeLabel ด้วยไม่งั้น Memory ค้าง
+    console.timeEnd(logLabel);
     this.logger.error('All models failed to process the request.');
+    throw new Error('AI_COULD_NOT_UNDERSTAND');
+  }
+
+  async extractIncomeData(text: string): Promise<any> {
+    const logLabel = `[AI Income Process] "${text.substring(0, 20)}${text.length > 20 ? '...' : ''}"`;
+    console.time(logLabel);
+
+    const prompt = `You are an AI Finance Tracker assistant. Your job is to extract INCOME information from Thai or English text.
+  
+  STRICT RULES:
+  1. Extract the source of income (e.g., Salary, Bonus, Sales).
+  2. If amount is not clearly stated, use 0.
+  3. Keyboard Fix: If "ถจ" appear, it means "50", "ค" means "8", "ต" means "9".
+  4. If the input text is gibberish, nonsense, or contains no clear income intent, 
+     set "action" to "invalid_input" and "source" to "unknown".
+  
+  Text to extract: "${text}"
+  Return ONLY a JSON object like: {"source": string, "amount": number, "action": "record_income"}`;
+
+    for (const modelName of this.modelPriority) {
+      try {
+        const model = this.genAI.getGenerativeModel({
+          model: modelName,
+          generationConfig: !modelName.includes('gemma')
+            ? { responseMimeType: 'application/json' }
+            : {},
+        });
+
+        const result = await model.generateContent(prompt);
+        const response = await result.response;
+        let jsonText = response.text().trim();
+
+        const jsonMatch = jsonText.match(/({[\s\S]*?})/);
+        if (jsonMatch) {
+          jsonText = jsonMatch[1];
+        }
+
+        const parsedData = JSON.parse(jsonText);
+
+        if (
+          parsedData.action === 'invalid_input' ||
+          (parsedData.amount === 0 && parsedData.source === 'unknown')
+        ) {
+          throw new Error('AI_COULD_NOT_UNDERSTAND');
+        }
+
+        console.timeEnd(logLabel);
+        return parsedData;
+      } catch (e: any) {
+        if (e.message === 'AI_COULD_NOT_UNDERSTAND') throw e;
+        continue; // Try next model
+      }
+    }
+
+    console.timeEnd(logLabel);
     throw new Error('AI_COULD_NOT_UNDERSTAND');
   }
 }
