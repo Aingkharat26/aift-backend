@@ -121,10 +121,12 @@ export class AiService implements OnModuleInit {
     const prompt = `You are an AI Finance Tracker assistant. Your job is to extract INCOME information from Thai or English text.
   
   STRICT RULES:
-  1. Extract the source of income (e.g., Salary, Bonus, Sales).
-  2. If amount is not clearly stated, use 0.
-  3. Keyboard Fix: If "ถจ" appear, it means "50", "ค" means "8", "ต" means "9".
-  4. If the input text is gibberish, nonsense, or contains no clear income intent, 
+  1. Extract the SPECIFIC source of income (e.g., "เงินเดือน", "ขายของ", "แม่ให้มา").
+  2. DO NOT use generic words like "income", "รับ", or "รายรับ" as the source name unless it's the only word provided.
+  3. If the user says "รายรับจากแม่ 500", the source should be "จากแม่" or "แม่ให้มา".
+  4. If amount is not clearly stated, use 0.
+  5. Keyboard Fix: If "ถจ" appear, it means "50", "ค" means "8", "ต" means "9".
+  6. If the input text is gibberish, nonsense, or contains no clear income intent, 
      set "action" to "invalid_input" and "source" to "unknown".
   
   Text to extract: "${text}"
