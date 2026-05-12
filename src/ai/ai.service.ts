@@ -4,7 +4,7 @@ import { GoogleGenerativeAI } from '@google/generative-ai';
 
 @Injectable()
 export class AiService implements OnModuleInit {
-  private genAI: GoogleGenerativeAI;
+  private readonly genAI: GoogleGenerativeAI;
   private readonly logger = new Logger(AiService.name);
 
   private readonly modelPriority = [
@@ -14,7 +14,7 @@ export class AiService implements OnModuleInit {
     'models/gemma-4-31b-it',
   ];
 
-  constructor(private configService: ConfigService) {
+  constructor(private readonly configService: ConfigService) {
     const apiKey = this.configService.get<string>('GEMINI_API_KEY') || '';
     this.genAI = new GoogleGenerativeAI(apiKey);
   }
@@ -26,10 +26,10 @@ export class AiService implements OnModuleInit {
         const response = await fetch(
           `https://generativelanguage.googleapis.com/v1beta/models?key=${apiKey}`,
         );
-        const data = await response.json();
+        await response.json();
         this.logger.log('--- AI Models Verified ---');
-      } catch (e) {
-        this.logger.error('Failed to fetch models list');
+      } catch (e: any) {
+        this.logger.error(`Failed to fetch models list: ${e.message || e}`);
       }
     }
   }
@@ -53,23 +53,7 @@ export class AiService implements OnModuleInit {
 
     for (const modelName of this.modelPriority) {
       try {
-        const model = this.genAI.getGenerativeModel({
-          model: modelName,
-          generationConfig: !modelName.includes('gemma')
-            ? { responseMimeType: 'application/json' }
-            : {},
-        });
-
-        const result = await model.generateContent(prompt);
-        const response = await result.response;
-        let jsonText = response.text().trim();
-
-        const jsonMatch = jsonText.match(/({[\s\S]*?})/);
-        if (jsonMatch) {
-          jsonText = jsonMatch[1];
-        }
-
-        const parsedData = JSON.parse(jsonText);
+        const parsedData = await this.generateAndParseJSON(modelName, prompt);
 
         if (
           parsedData.action === 'invalid_input' ||
@@ -81,31 +65,9 @@ export class AiService implements OnModuleInit {
         console.timeEnd(logLabel);
         return parsedData;
       } catch (e: any) {
-        const status = e?.status;
-        const message = e?.message || '';
-
-        if (message === 'AI_COULD_NOT_UNDERSTAND') {
-          this.logger.error(
-            `Model ${modelName} returned: AI_COULD_NOT_UNDERSTAND`,
-          );
+        if (!this.handleModelError(e, modelName)) {
           break;
         }
-
-        const isRetryable =
-          [429, 404, 500].includes(status) ||
-          message.includes('429') ||
-          message.includes('404') ||
-          message.includes('500');
-
-        if (isRetryable) {
-          this.logger.warn(
-            `Model ${modelName} failed (${status || 'Error'}), trying next...`,
-          );
-          continue;
-        }
-
-        this.logger.error(`Critical error with ${modelName}: ${message}`);
-        break;
       }
     }
 
@@ -134,23 +96,7 @@ export class AiService implements OnModuleInit {
 
     for (const modelName of this.modelPriority) {
       try {
-        const model = this.genAI.getGenerativeModel({
-          model: modelName,
-          generationConfig: !modelName.includes('gemma')
-            ? { responseMimeType: 'application/json' }
-            : {},
-        });
-
-        const result = await model.generateContent(prompt);
-        const response = await result.response;
-        let jsonText = response.text().trim();
-
-        const jsonMatch = jsonText.match(/({[\s\S]*?})/);
-        if (jsonMatch) {
-          jsonText = jsonMatch[1];
-        }
-
-        const parsedData = JSON.parse(jsonText);
+        const parsedData = await this.generateAndParseJSON(modelName, prompt);
 
         if (
           parsedData.action === 'invalid_input' ||
@@ -169,5 +115,49 @@ export class AiService implements OnModuleInit {
 
     console.timeEnd(logLabel);
     throw new Error('AI_COULD_NOT_UNDERSTAND');
+  }
+
+  private async generateAndParseJSON(modelName: string, prompt: string): Promise<any> {
+    const model = this.genAI.getGenerativeModel({
+      model: modelName,
+      generationConfig: modelName.includes('gemma')
+        ? {}
+        : { responseMimeType: 'application/json' },
+    });
+
+    const result = await model.generateContent(prompt);
+    const response = result.response;
+    let jsonText = response.text().trim();
+
+    const jsonMatch = /({[\s\S]*?})/.exec(jsonText);
+    if (jsonMatch) {
+      jsonText = jsonMatch[1];
+    }
+
+    return JSON.parse(jsonText);
+  }
+
+  private handleModelError(e: any, modelName: string): boolean {
+    const status = e?.status;
+    const message = e?.message || '';
+
+    if (message === 'AI_COULD_NOT_UNDERSTAND') {
+      this.logger.error(`Model ${modelName} returned: AI_COULD_NOT_UNDERSTAND`);
+      return false; // Stop retrying
+    }
+
+    const isRetryable =
+      [429, 404, 500].includes(status) ||
+      message.includes('429') ||
+      message.includes('404') ||
+      message.includes('500');
+
+    if (isRetryable) {
+      this.logger.warn(`Model ${modelName} failed (${status || 'Error'}), trying next...`);
+      return true; // Continue retrying
+    }
+
+    this.logger.error(`Critical error with ${modelName}: ${message}`);
+    return false; // Stop retrying
   }
 }
