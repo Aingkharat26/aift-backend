@@ -77,6 +77,67 @@ export class AiService implements OnModuleInit {
     throw new Error('AI_COULD_NOT_UNDERSTAND');
   }
 
+  async generateMonthlyInsight(input: {
+    monthLabel: string;
+    prevLabel: string;
+    currentExpenses: { category: string; total: number }[];
+    currentExpenseTotal: number;
+    currentIncomeTotal: number;
+    previousExpenses: { category: string; total: number }[];
+    previousExpenseTotal: number;
+    previousIncomeTotal: number;
+  }): Promise<string> {
+    const fmt = (n: number) =>
+      Math.round(n)
+        .toString()
+        .replace(/\B(?=(\d{3})+(?!\d))/g, ',');
+
+    const currentLines = input.currentExpenses.map(
+      (e) => `${e.category} ${fmt(e.total)} บาท`,
+    );
+    const prevLines = input.previousExpenses.map(
+      (e) => `${e.category} ${fmt(e.total)} บาท`,
+    );
+
+    const prompt = `คุณคือผู้ช่วยการเงินส่วนตัว วิเคราะห์และสรุปการใช้จ่ายรายเดือนให้ผู้ใช้ฟังเป็นภาษาไทย กระชับ ตรงประเด็น
+
+ข้อมูลเดือนนี้ (${input.monthLabel}):
+- ยอดใช้จ่ายรวม: ${fmt(input.currentExpenseTotal)} บาท
+- รายรับรวม: ${fmt(input.currentIncomeTotal)} บาท
+- รายจ่ายแยกหมวด: ${currentLines.join(', ') || 'ไม่มีข้อมูล'}
+
+ข้อมูลเดือนก่อนหน้า (${input.prevLabel}):
+- ยอดใช้จ่ายรวม: ${fmt(input.previousExpenseTotal)} บาท
+- รายรับรวม: ${fmt(input.previousIncomeTotal)} บาท
+- รายจ่ายแยกหมวด: ${prevLines.join(', ') || 'ไม่มีข้อมูล'}
+
+จงเขียนสรุป 3-5 ประโยค ประกอบด้วย:
+1. ภาพรวม: ใช้จ่ายไปเท่าไหร่ รายรับเท่าไหร่ เหลือหรือขาดเท่าไหร่
+2. หมวดที่ใช้จ่ายสูงสุด และเทียบกับเดือนก่อนหน้าว่าเพิ่มขึ้นหรือลดลง
+3. การเปลี่ยนแปลงที่โดดเด่นระหว่างเดือนนี้กับเดือนก่อนหน้า (ถ้ามีข้อมูล)
+4. คำแนะนำสั้นๆ 1 ข้อ ในการประหยัดหรือจัดการเงินเดือนหน้า
+
+ใช้ภาษาไทยเป็นกันเอง มีอีโมจิได้ไม่เกิน 2-3 ตัว และห้ามเกิน 150 คำ`;
+
+    for (const modelName of this.modelPriority) {
+      try {
+        const model = this.genAI.getGenerativeModel({
+          model: modelName,
+          generationConfig: { temperature: 0.7, maxOutputTokens: 400 },
+        });
+        const result = await model.generateContent(prompt);
+        const text = result.response.text().trim();
+        if (text) return text;
+      } catch (e: any) {
+        this.logger.warn(
+          `Model ${modelName} failed for monthly insight: ${e?.message || e}`,
+        );
+      }
+    }
+
+    throw new Error('AI_INSIGHT_FAILED');
+  }
+
   async extractIncomeData(text: string): Promise<any> {
     const logLabel = `[AI Income Process] "${text.substring(0, 20)}${text.length > 20 ? '...' : ''}"`;
     console.time(logLabel);

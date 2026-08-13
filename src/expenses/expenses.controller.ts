@@ -58,6 +58,34 @@ export class ExpensesController {
     return { success: true, data };
   }
 
+  @Get('ai-summary')
+  async getAiSummary(
+    @Query('year') year?: string,
+    @Query('month') month?: string,
+  ) {
+    // อ่านจาก cache (ไม่เรียก AI ใหม่) — ใช้ตอนโหลดหน้า/เปลี่ยนเดือน
+    const data = await this.expensesService.getAiMonthlySummary(
+      year ? parseInt(year) : undefined,
+      month ? parseInt(month) : undefined,
+      false,
+    );
+    return { success: true, data };
+  }
+
+  @Post('ai-summary/refresh')
+  async refreshAiSummary(
+    @Body('year') year?: number,
+    @Body('month') month?: number,
+  ) {
+    // บังคับคำนวณใหม่ด้วย AI + เก็บ cache — ใช้ตอนเพิ่ม/แก้ไข/ลบรายการ
+    const data = await this.expensesService.getAiMonthlySummary(
+      year,
+      month,
+      true,
+    );
+    return { success: true, data };
+  }
+
   @Patch(':id')
   async updateExpense(
     @Param('id') id: number,
