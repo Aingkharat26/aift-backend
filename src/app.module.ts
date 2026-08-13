@@ -9,6 +9,8 @@ import { Expense } from './expenses/entities/expense.entity';
 import { AiSummaryCache } from './expenses/entities/ai-summary-cache.entity';
 import { Income } from './income/entities/income.entity';
 import { IncomeModule } from './income/income.module';
+import { Budget } from './budgets/entities/budget.entity';
+import { BudgetsModule } from './budgets/budgets.module';
 
 @Module({
   imports: [
@@ -20,12 +22,13 @@ import { IncomeModule } from './income/income.module';
     TypeOrmModule.forRoot({
       type: 'better-sqlite3',
       database: 'data/aift.sqlite',
-      entities: [Expense, Income, AiSummaryCache],
+      entities: [Expense, Income, AiSummaryCache, Budget],
       synchronize: true, // Auto-create tables (for development only)
     }),
     ExpensesModule,
     IncomeModule,
     AiModule,
+    BudgetsModule,
   ],
   controllers: [AppController],
   providers: [AppService],
