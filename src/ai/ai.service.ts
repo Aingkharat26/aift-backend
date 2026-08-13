@@ -7,11 +7,12 @@ export class AiService implements OnModuleInit {
   private readonly genAI: GoogleGenerativeAI;
   private readonly logger = new Logger(AiService.name);
 
+  // ถ้าตัวแรก error (429/404/500) จะลองตัวถัดไปอัตโนมัติ
   private readonly modelPriority = [
-    'models/gemini-3-flash-preview',
-    'models/gemini-2.5-flash',
-    'models/gemini-3.1-flash-lite-preview',
-    'models/gemma-4-31b-it',
+    'models/gemini-3.5-flash-lite',
+    'models/gemini-3.6-flash',
+    'models/gemini-3.1-flash-lite',
+    'models/gemini-2.5-flash-lite',
   ];
 
   constructor(private readonly configService: ConfigService) {
