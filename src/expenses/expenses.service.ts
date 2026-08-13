@@ -86,6 +86,17 @@ export class ExpensesService {
     }));
   }
 
+  async processReceiptImage(base64: string, mimeType: string): Promise<Expense> {
+    const aiResult = await this.aiService.extractExpenseFromReceipt(base64, mimeType);
+
+    const expense = new Expense();
+    expense.item = aiResult.item;
+    expense.amount = aiResult.amount;
+    expense.category = aiResult.category;
+
+    return this.expensesRepository.save(expense);
+  }
+
   async getAiMonthlySummary(
     year?: number,
     month?: number,

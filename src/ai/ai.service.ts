@@ -77,6 +77,56 @@ export class AiService implements OnModuleInit {
     throw new Error('AI_COULD_NOT_UNDERSTAND');
   }
 
+  async extractExpenseFromReceipt(base64: string, mimeType: string): Promise<any> {
+    const prompt = `You are an AI Finance Tracker assistant. Your job is to extract expense information from a RECEIPT image (Thai or English).
+  Categories: อาหาร, เครื่องดื่ม, เดินทาง, ช้อปปิ้ง, บันเทิง, สุขภาพ, บิล, สัตว์เลี้ยง, อื่นๆ
+
+  STRICT RULES:
+  1. "item" = ชื่อร้าน/ร้านค้า (store/merchant name) เช่น "7-Eleven", "ร้านกาแฟ" — not a single product line.
+  2. "amount" = ยอดรวมทั้งใบเสร็จ (TOTAL/GRAND TOTAL/รวมทั้งสิ้น) — the final total, not each line item.
+  3. Pick the category that best fits the store (e.g. ร้านอาหาร→อาหาร, ร้านกาแฟ→เครื่องดื่ม, ปั๊มน้ำมัน→เดินทาง, ซูเปอร์มาเก็ต→ช้อปปิ้ง).
+  4. If the image is not a receipt, is blurry, or has no clear total, set "action" to "invalid_input" and "item" to "unknown".
+
+  Return ONLY a JSON object like: {"item": string, "amount": number, "category": string, "action": "record_expense"}`;
+
+    for (const modelName of this.modelPriority) {
+      try {
+        const model = this.genAI.getGenerativeModel({
+          model: modelName,
+          generationConfig: { responseMimeType: 'application/json' },
+        });
+        const result = await model.generateContent([
+          { inlineData: { mimeType, data: base64 } },
+          { text: prompt },
+        ]);
+        const text = result.response.text().trim();
+        const jsonMatch = /({[\s\S]*?})/.exec(text);
+        const parsedData = JSON.parse(jsonMatch ? jsonMatch[1] : text);
+
+        if (
+          parsedData.action === 'invalid_input' ||
+          (parsedData.amount === 0 && parsedData.item === 'unknown')
+        ) {
+          throw new Error('AI_COULD_NOT_UNDERSTAND');
+        }
+
+        return parsedData;
+      } catch (e: any) {
+        if (e.message === 'AI_COULD_NOT_UNDERSTAND') {
+          this.logger.error(
+            `Model ${modelName} cannot read receipt image`,
+          );
+          break;
+        }
+        if (!this.handleModelError(e, modelName)) {
+          break;
+        }
+      }
+    }
+
+    throw new Error('AI_COULD_NOT_UNDERSTAND');
+  }
+
   async generateMonthlyInsight(input: {
     monthLabel: string;
     prevLabel: string;

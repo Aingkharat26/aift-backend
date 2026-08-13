@@ -40,6 +40,34 @@ export class ExpensesController {
     }
   }
 
+  @Post('receipt')
+  async processReceipt(
+    @Body() body: { image?: string; mimeType?: string },
+  ) {
+    if (!body.image) {
+      throw new BadRequestException('Image is required');
+    }
+
+    try {
+      const result = await this.expensesService.processReceiptImage(
+        body.image,
+        body.mimeType || 'image/jpeg',
+      );
+      return { success: true, data: result };
+    } catch (error) {
+      if (error.message === 'AI_COULD_NOT_UNDERSTAND') {
+        throw new BadRequestException('AI_COULD_NOT_UNDERSTAND');
+      }
+      const status = error?.status || 500;
+      if (status === 429) {
+        throw new BadRequestException('AI_QUOTA_EXCEEDED');
+      }
+      throw new InternalServerErrorException(
+        error.message || 'Internal Server Error',
+      );
+    }
+  }
+
   @Get('daily')
   async getDaily(@Query('date') date?: string) {
     const data = await this.expensesService.getDailyExpenses(date);
