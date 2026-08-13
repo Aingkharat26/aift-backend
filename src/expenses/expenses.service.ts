@@ -1,4 +1,4 @@
-import { Injectable } from '@nestjs/common';
+import { Injectable, NotFoundException } from '@nestjs/common';
 import { InjectRepository } from '@nestjs/typeorm';
 import { Repository } from 'typeorm';
 import { Expense } from './entities/expense.entity';
@@ -79,6 +79,22 @@ export class ExpensesService {
       category: r.category,
       total: parseFloat(r.total),
     }));
+  }
+
+  async updateExpense(
+    id: number,
+    data: { item?: string; amount?: number; category?: string },
+  ): Promise<Expense> {
+    const expense = await this.expensesRepository.findOne({ where: { id } });
+    if (!expense) {
+      throw new NotFoundException(`Expense with id ${id} not found`);
+    }
+
+    if (data.item !== undefined) expense.item = data.item;
+    if (data.amount !== undefined) expense.amount = data.amount;
+    if (data.category !== undefined) expense.category = data.category;
+
+    return this.expensesRepository.save(expense);
   }
 
   async deleteExpense(id: number): Promise<void> {

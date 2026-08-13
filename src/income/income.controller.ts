@@ -1,4 +1,4 @@
-import { Controller, Post, Get, Body, Query, Delete, Param } from '@nestjs/common';
+import { Controller, Post, Get, Body, Query, Delete, Patch, Param } from '@nestjs/common';
 import { IncomeService } from './income.service';
 
 @Controller('income')
@@ -32,6 +32,15 @@ export class IncomeController {
   async getDaily(@Query('date') date?: string) {
     const data = await this.incomeService.getDailyIncome(date);
     return { success: true, data };
+  }
+
+  @Patch(':id')
+  async update(
+    @Param('id') id: string,
+    @Body() data: { source?: string; amount?: number },
+  ) {
+    const result = await this.incomeService.update(parseInt(id), data);
+    return { success: true, data: result };
   }
 
   @Delete(':id')

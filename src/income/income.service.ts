@@ -1,4 +1,4 @@
-import { Injectable } from '@nestjs/common';
+import { Injectable, NotFoundException } from '@nestjs/common';
 import { InjectRepository } from '@nestjs/typeorm';
 import { Repository } from 'typeorm';
 import { Income } from './entities/income.entity';
@@ -77,6 +77,21 @@ export class IncomeService {
       .andWhere('income.date <= :endOfDay', { endOfDay })
       .orderBy('income.date', 'DESC')
       .getMany();
+  }
+
+  async update(
+    id: number,
+    data: { source?: string; amount?: number },
+  ): Promise<Income> {
+    const income = await this.incomeRepository.findOne({ where: { id } });
+    if (!income) {
+      throw new NotFoundException(`Income with id ${id} not found`);
+    }
+
+    if (data.source !== undefined) income.source = data.source;
+    if (data.amount !== undefined) income.amount = data.amount;
+
+    return this.incomeRepository.save(income);
   }
 
   async delete(id: number): Promise<void> {

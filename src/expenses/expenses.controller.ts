@@ -4,6 +4,7 @@ import {
   Body,
   Get,
   Delete,
+  Patch,
   Param,
   Query,
   BadRequestException,
@@ -55,6 +56,15 @@ export class ExpensesController {
       month ? parseInt(month) : undefined,
     );
     return { success: true, data };
+  }
+
+  @Patch(':id')
+  async updateExpense(
+    @Param('id') id: number,
+    @Body() data: { item?: string; amount?: number; category?: string },
+  ) {
+    const result = await this.expensesService.updateExpense(id, data);
+    return { success: true, data: result };
   }
 
   @Delete(':id')
