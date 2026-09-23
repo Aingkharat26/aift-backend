@@ -14,6 +14,24 @@
 
 ## 🕒 บันทึกรายการเปลี่ยนแปลง (Change History)
 
+### 📅 2026-09-23 16:38:00 (Local Time)
+**ประเภท:** `[Fix]` `[Config / Infra]` `[Backend]`  
+**หัวข้อ:** แก้ไขปัญหา Render Deploy ค้างและเกิด Port Scan Timeout (ปรับ Start Script เป็น Production Mode)  
+**ปัญหาหรือความต้องการ (Issue / Requirement):**
+- Render Deploy แจ้งเตือน: `Port scan timeout reached, no open ports detected. Bind your service to at least one port... Timed Out`
+- สาเหตุเกิดจาก Render เรียกคำสั่ง `npm run start` โดยค่าเริ่มต้น ซึ่งรัน `nest start` (Nest CLI ในโหมด Development) ทำให้ต้องรันคอมไพล์ TypeScript ใหม่ในหน่วยความจำบน Container ขนาด 512MB RAM จนเกิด Resource exhaustion และค้างโดยไม่ยอมบูตไฟล์ `dist/main.js` และไม่เปิดพอร์ต
+**สิ่งที่แก้ไข (Changes Detail):**
+1. **ปรับปรุง `package.json`:** เปลี่ยนคำสั่ง `"start"` จาก `"nest start"` เป็น `"node dist/main"` เพื่อให้การสั่ง `npm run start` หรือค่าเริ่มต้นของ Render รัน Production bundle ทันที
+2. **เสริมความทนทานในการเปิดพอร์ตและดักจับ Error (`src/main.ts`):** แปลงค่า `PORT` ด้วย `parseInt(process.env.PORT, 10)` และเพิ่ม bootstrap fatal error handler
+3. **ป้องกัน SQLite ขัดข้องเมื่อไม่มีไดเรกทอรี (`src/app.module.ts`):** ตรวจสอบและสร้างโฟลเดอร์สำหรับเก็บไฟล์ SQLite โดยอัตโนมัติ (`fs.mkdirSync`)
+**ไฟล์ที่แก้ไข (Affected Files):**
+- `package.json`
+- `src/main.ts`
+- `src/app.module.ts`
+- `CHANGELOG.md`
+
+---
+
 ### 📅 2026-09-23 16:30:00 (Local Time)
 **ประเภท:** `[Fix]` `[Backend / CORS]`  
 **หัวข้อ:** ปรับปรุง CORS Configuration ให้รองรับการเชื่อมต่อจาก Vercel และ Mobile Client สมบูรณ์แบบ  
