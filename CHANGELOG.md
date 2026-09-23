@@ -14,6 +14,42 @@
 
 ## 🕒 บันทึกรายการเปลี่ยนแปลง (Change History)
 
+### 📅 2026-09-23 16:06:00 (Local Time)
+**ประเภท:** `[Fix]` `[Config / Infra]`  
+**หัวข้อ:** แก้ไขปัญหา Render Deploy ติด ETIMEDOUT และ Port Scan Timeout  
+**ปัญหาหรือความต้องการ (Issue / Requirement):**
+- การ Deploy บน Render ล้มเหลวเนื่องจาก TypeORM ติดปัญหา `AggregateError [ETIMEDOUT]` ขณะเชื่อมต่อฐานข้อมูล ทำให้แอปพลิเคชันไปไม่ถึงขั้นตอนการเปิด Port (`app.listen()`) จน Render แจ้งเตือน `Port scan timeout reached, no open ports detected`
+**สิ่งที่แก้ไข (Changes Detail):**
+1. **0.0.0.0 Port Binding (`main.ts`):**
+   - กำหนดให้ NestJS ทำการ Listen ที่ Host `0.0.0.0` อย่างชัดเจน เพื่อให้ Cloud Scanner ของ Render ตรวจพบ Port ได้อย่างแม่นยำ
+2. **Database Timeout & Diagnostics (`app.module.ts`):**
+   - เพิ่ม `connectionTimeoutMillis: 10000` เพื่อไม่ให้ฐานข้อมูลค้างเป็นเวลานานเกินไป
+   - เพิ่ม Logging ตรวจสอบ `DATABASE_URL` (แบบปกปิดรหัสผ่าน) เพื่อให้สามารถตรวจสอบ URL ปลายทางจาก Render Logs ได้ทันที
+**ไฟล์ที่แก้ไข (Affected Files):**
+- `src/main.ts`
+- `src/app.module.ts`
+- `CHANGELOG.md`
+
+---
+
+### 📅 2026-09-23 15:36:00 (Local Time)
+**ประเภท:** `[Feature]` `[Config / Infra]`  
+**หัวข้อ:** รองรับการเชื่อมต่อ Cloud PostgreSQL (Supabase/Neon/Render) และ Health Check Endpoint  
+**ปัญหาหรือความต้องการ (Issue / Requirement):**
+- เพื่อรองรับการ Deploy ระบบ Backend ขึ้น Cloud สำหรับทดสอบบนมือถือ
+**สิ่งที่แก้ไข (Changes Detail):**
+1. **DATABASE_URL & SSL Support (`app.module.ts`):**
+   - ปรับปรุง TypeORM configuration ให้อ่าน Connection String จาก `DATABASE_URL` พร้อมเปิด SSL (`rejectUnauthorized: false`) โดยอัตโนมัติ
+   - รองรับ Fallback ไปยัง SQLite สำหรับการรันแบบ Local
+2. **Health Check Endpoint (`app.controller.ts`):**
+   - เพิ่ม route `@Get('health')` สำหรับการตรวจสอบ Uptime และป้องกัน Cold-start
+**ไฟล์ที่แก้ไข (Affected Files):**
+- `src/app.module.ts`
+- `src/app.controller.ts`
+- `CHANGELOG.md`
+
+---
+
 ### 📅 2026-09-23 14:58:00 (Local Time)
 **ประเภท:** `[Enhancement]` `[Frontend / UI / Redesign]`  
 **หัวข้อ:** ปรับเปลี่ยนการแสดงผลงบประมาณบน Dashboard เป็น "Slim Budget Ribbon" แนวนอนด้านบน  
