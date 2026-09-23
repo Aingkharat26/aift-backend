@@ -1,6 +1,8 @@
 import { Module } from '@nestjs/common';
 import { ConfigModule, ConfigService } from '@nestjs/config';
 import { TypeOrmModule } from '@nestjs/typeorm';
+import * as fs from 'fs';
+import * as path from 'path';
 import { AppController } from './app.controller';
 import { AppService } from './app.service';
 import { ExpensesModule } from './expenses/expenses.module';
@@ -65,12 +67,17 @@ import { User } from './auth/entities/user.entity';
             synchronize: true,
           };
         }
+        const sqlitePath = configService.get<string>(
+          'DB_DATABASE',
+          'data/aift.sqlite',
+        );
+        const sqliteDir = path.dirname(sqlitePath);
+        if (!fs.existsSync(sqliteDir)) {
+          fs.mkdirSync(sqliteDir, { recursive: true });
+        }
         return {
           type: 'better-sqlite3',
-          database: configService.get<string>(
-            'DB_DATABASE',
-            'data/aift.sqlite',
-          ),
+          database: sqlitePath,
           entities,
           synchronize: true,
         };

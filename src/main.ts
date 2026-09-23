@@ -11,8 +11,12 @@ async function bootstrap() {
     methods: 'GET,HEAD,PUT,PATCH,POST,DELETE,OPTIONS',
     credentials: true,
   });
-  const port = process.env.PORT ?? 3000;
+  const port = process.env.PORT ? parseInt(process.env.PORT, 10) : 3000;
+  console.log(`[Bootstrap] Starting server on port ${port} (0.0.0.0)...`);
   await app.listen(port, '0.0.0.0');
-  console.log(`Server is running on port ${port} (0.0.0.0)`);
+  console.log(`[Bootstrap] Server successfully running on port ${port} (0.0.0.0)`);
 }
-bootstrap();
+bootstrap().catch((err) => {
+  console.error('[Bootstrap] Fatal error starting server:', err);
+  process.exit(1);
+});
