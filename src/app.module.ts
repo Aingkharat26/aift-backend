@@ -25,21 +25,29 @@ import { User } from './auth/entities/user.entity';
       inject: [ConfigService],
       useFactory: (configService: ConfigService) => {
         const dbType = configService.get<string>('DB_TYPE', 'sqlite');
-        const databaseUrl = configService.get<string>('DATABASE_URL');
+        const databaseUrl = configService.get<string>('DATABASE_URL')?.trim();
         const entities = [Expense, Income, AiSummaryCache, Budget, User];
 
-        if (dbType === 'postgres' || databaseUrl) {
+        if (databaseUrl || dbType === 'postgres') {
           const sslRequired =
             configService.get<string>('DB_SSL', 'true') === 'true';
           if (databaseUrl) {
+            console.log(
+              `[Database] Connecting to PostgreSQL via DATABASE_URL (${databaseUrl.replace(/:([^@]+)@/, ':****@')})`,
+            );
             return {
               type: 'postgres',
               url: databaseUrl,
               ssl: sslRequired ? { rejectUnauthorized: false } : false,
               entities,
               synchronize: true,
+              extra: {
+                connectionTimeoutMillis: 10000,
+              },
             };
           }
+          const host = configService.get<string>('DB_HOST', 'localhost');
+          console.log(`[Database] Connecting to PostgreSQL at ${host}:${configService.get('DB_PORT', 5432)}`);
           return {
             type: 'postgres',
             host: configService.get<string>('DB_HOST', 'localhost'),

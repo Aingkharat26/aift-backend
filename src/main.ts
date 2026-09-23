@@ -7,6 +7,8 @@ async function bootstrap() {
   app.use(express.json({ limit: '15mb' })); // รองรับรูปใบเสร็จ base64 ขนาดใหญ่
   app.use(express.urlencoded({ extended: true }));
   app.enableCors();
-  await app.listen(process.env.PORT ?? 3000);
+  const port = process.env.PORT ?? 3000;
+  await app.listen(port, '0.0.0.0');
+  console.log(`Server is running on port ${port} (0.0.0.0)`);
 }
 bootstrap();
