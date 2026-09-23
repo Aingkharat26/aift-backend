@@ -14,6 +14,121 @@
 
 ## 🕒 บันทึกรายการเปลี่ยนแปลง (Change History)
 
+### 📅 2026-09-23 14:58:00 (Local Time)
+**ประเภท:** `[Enhancement]` `[Frontend / UI / Redesign]`  
+**หัวข้อ:** ปรับเปลี่ยนการแสดงผลงบประมาณบน Dashboard เป็น "Slim Budget Ribbon" แนวนอนด้านบน  
+**ปัญหาหรือความต้องการ (Issue / Requirement):**
+- การ์ดงบประมาณแนวตั้งตรงกลางทำให้เลย์เอาต์ดูโปร่ง มีพื้นที่ว่างโหวง และบีบพื้นที่ของกราฟวงกลมและรายการรายจ่าย
+- ผู้ใช้ต้องการรูปแบบใหม่ที่ไม่เกะกะสายตาและลงตัวกับหน้า Dashboard
+
+**สิ่งที่แก้ไข (Changes Detail):**
+1. **Slim Budget Ribbon (Horizontal):** ออกแบบ `mini-budget` ใหม่เป็นแถบริบบอนแนวนอนกะทัดรัด (สูง ~44px) วางอยู่ใต้ส่วนหัวของ Dashboard:
+   - **ด้านซ้าย:** ไอคอน 🎯, ป้าย "งบเดือนนี้", Progress Bar กะทัดรัด พร้อมตัวเลขใช้ไป/งบรวม และเปอร์เซ็นต์
+   - **ตรงกลาง:** ชิปหมวดหมู่เด่นพร้อมสถานะ % แยกสี (🟢 ปกติ / 🟡 เตือน / 🔴 เกินงบ)
+   - **ด้านขวา:** ป้ายเตือนและปุ่มลัด "จัดการงบ →"
+2. **Restored 2-Column Balance:** คืนพื้นที่เต็มให้ `app-summary-chart` (กราฟวงกลม) และ `app-daily-log` (รายการวันนี้) เป็น 2 คอลัมน์หลักเต็มความสูงหน้าจอ ไม่ถูกบีบหรือแย่งพื้นที่อีกต่อไป
+
+**ไฟล์ที่แก้ไข (Affected Files):**
+- `aift-frontend/src/app/components/mini-budget/mini-budget.component.html`
+- `aift-frontend/src/app/components/mini-budget/mini-budget.component.scss`
+- `aift-frontend/src/app/components/main-dashboard/main-dashboard.component.html`
+- `aift-frontend/src/app/components/main-dashboard/main-dashboard.component.css`
+- `CHANGELOG.md`
+
+---
+
+### 📅 2026-09-23 14:53:00 (Local Time)
+**ประเภท:** `[Enhancement]` `[Frontend / UI]`  
+**หัวข้อ:** ปรับย่อขนาดความกว้างของการ์ดมินิวิดเจ็ตงบประมาณบนหน้า Dashboard ให้กะทัดรัดและสมดุล  
+**ปัญหาหรือความต้องการ (Issue / Requirement):**
+- การ์ดมินิวิดเจ็ตงบประมาณมีความกว้างมากเกินไป (ยืดเต็ม 1 ใน 3 ของหน้าจอ 1920px) ทำให้ดูโปร่งและกินพื้นที่ส่วนอื่นมากเกินไป
+
+**สิ่งที่แก้ไข (Changes Detail):**
+1. **Compact Fixed Width:** ปรับขนาด `.budget-section` ใน `main-dashboard.component.css` ให้เป็นขนาดกะทัดรัด `flex: 0 0 250px; max-width: 260px;` เพื่อไม่ให้ยืดกว้างเกินความจำเป็น
+2. **Rebalanced Columns:** เพิ่มพื้นที่ให้ `.log-section` เป็น `flex: 1.8` และ `.chart-section` เป็น `flex: 1.1` ทำให้รายการรายจ่ายและกราฟวงกลมมีพื้นที่แสดงผลอย่างเหมาะสมและสบายตายิ่งขึ้น
+3. **Paddings & Spacing:** ปรับแต่ง padding ใน `mini-budget.component.scss` ให้พอดีกับขนาดการ์ดใหม่
+
+**ไฟล์ที่แก้ไข (Affected Files):**
+- `aift-frontend/src/app/components/main-dashboard/main-dashboard.component.css`
+- `aift-frontend/src/app/components/mini-budget/mini-budget.component.scss`
+- `CHANGELOG.md`
+
+---
+
+### 📅 2026-09-23 14:50:00 (Local Time)
+**ประเภท:** `[Feature]` `[Frontend / Dashboard / Budgets]`  
+**หัวข้อ:** เพิ่มมินิวิดเจ็ตงบประมาณรายหมวด (Mini Budget Widget) บนหน้า Dashboard  
+**ปัญหาหรือความต้องการ (Issue / Requirement):**
+- ผู้ใช้ต้องการดูสถานะงบประมาณได้ทันทีจากหน้า Dashboard โดยไม่ต้องกดสลับไปหน้างบประมาณทุกครั้ง
+
+**สิ่งที่แก้ไข (Changes Detail):**
+1. **MiniBudgetComponent:** สร้างคอมโพเนนต์ Standalone ใหม่ (`mini-budget`) แสดง:
+   - แถบสรุปภาพรวมการใช้งบทั้งเดือน (Total Spent / Total Budget) พร้อม % และสถานะสี
+   - รายการงบประมาณหมวดเด่น (Top Categories) พร้อม Progress Bar แยกสีตามเกณฑ์ (🟢 ปกติ <80% / 🟡 ใกล้เกิน 80-100% / 🔴 เกินงบ >100%)
+   - ป้าย Badge เตือนเมื่อมีหมวดใกล้เกิน/เกินงบ
+   - ปุ่มลัด "จัดการงบ →" เชื่อมต่อไปยังหน้างบประมาณเต็ม (`/budgets`)
+   - Empty State สวยงามเมื่อยังไม่ได้ตั้งงบ
+2. **Dashboard Layout Update:** ปรับ `MainDashboardComponent` จัดวางการ์ดมินิวิดเจ็ตไว้ในแถวบน (`top-section`) ควบคู่กับกราฟวงกลมและรายการประจำวันอย่างลงตัว พร้อมรองรับ Responsive บนแท็บเล็ตและมือถือ
+3. **Real-time Sync:** อัปเดตข้อมูลอัตโนมัติตามเดือนที่เลือกจาก Date Selector และเมื่อมีการบันทึกรายจ่ายใหม่
+
+**ไฟล์ที่แก้ไข (Affected Files):**
+- `aift-frontend/src/app/components/mini-budget/mini-budget.component.ts`
+- `aift-frontend/src/app/components/mini-budget/mini-budget.component.html`
+- `aift-frontend/src/app/components/mini-budget/mini-budget.component.scss`
+- `aift-frontend/src/app/components/main-dashboard/main-dashboard.component.ts`
+- `aift-frontend/src/app/components/main-dashboard/main-dashboard.component.html`
+- `aift-frontend/src/app/components/main-dashboard/main-dashboard.component.css`
+- `CHANGELOG.md`
+
+---
+
+### 📅 2026-09-23 14:40:00 (Local Time)
+**ประเภท:** `[Fix]` `[Frontend / Budgets]`  
+**หัวข้อ:** แก้ไขบั๊กกดปุ่มตั้งงบไม่ได้ และ `TypeError: this.statuses.filter / map is not a function`  
+**ปัญหาหรือความต้องการ (Issue / Requirement):**
+- ผู้ใช้กดปุ่ม "＋ ตั้งงบ" ไม่ได้ และพบ Error ใน DevTools Console:
+  - `TypeError: this.statuses.filter is not a function`
+  - `TypeError: next is not iterable`
+  - `TypeError: this.statuses.map is not a function`
+- สาเหตุเกิดจาก API `GET /budgets/status` ส่งข้อมูลกลับมาเป็น Object `{ year, month, items: [...] }` แต่ `budget.service.ts` คืนค่า Object ทั้งตัวให้ `this.statuses` แทนที่จะเป็น Array ของ `items`
+
+**สิ่งที่แก้ไข (Changes Detail):**
+1. **BudgetService Response Mapping:** ปรับปรุง `budget.service.ts` ในฟังก์ชัน `getStatus()` ให้ดึง `res.data.items` ออกมาเป็น Array พร้อมแปลงฟิลด์ `percentUsed` ให้อัตโนมัติ
+2. **Defensive Array Checking:** ปรับปรุง `budget-panel.component.ts` เพิ่มการตรวจเช็ค `Array.isArray()` ใน `alerts`, `hasBudgets`, `reloadStatus`, `checkNotifications` และ `openAddDialog` ป้องกัน Error หลุดในกรณีที่ข้อมูลไม่ใช่อาร์เรย์
+3. **Backend Field Alignment:** เพิ่ม `percentUsed` ใน `aift-backend/src/budgets/budgets.service.ts` ควบคู่กับ `percent` เพื่อรองรับความเข้ากันได้ 100%
+
+**ไฟล์ที่แก้ไข (Affected Files):**
+- `aift-frontend/src/app/services/budget.service.ts`
+- `aift-frontend/src/app/components/budget-panel/budget-panel.component.ts`
+- `aift-backend/src/budgets/budgets.service.ts`
+- `CHANGELOG.md`
+
+---
+
+### 📅 2026-09-23 14:35:00 (Local Time)
+**ประเภท:** `[Fix]` `[Frontend / Auth / UX]`  
+**หัวข้อ:** ปรับปรุง Graceful Session Expiration และระบบจดจำหน้างบประมาณ (Return URL) เมื่อเกิด 401 Unauthorized  
+**ปัญหาหรือความต้องการ (Issue / Requirement):**
+- ผู้ใช้พบข้อผิดพลาด `Failed to load resource: the server responded with a status of 401 (Unauthorized)` เมื่อกดตั้งงบประมาณโดยที่ยังไม่ได้ล็อกอินหรือเซสชันหมดอายุ
+- ระบบเดิมพาตัดไปหน้า Login โดยไม่แจ้งสาเหตุที่ชัดเจน และขึ้น Popup alert กวนใจ ทำให้ผู้ใช้สับสนว่าเกิดอะไรขึ้น
+- เมื่อล็อกอินสำเร็จ ระบบเดิมจะพาไปหน้า Dashboard เสมอ ทำให้ต้องกดกลับมาหน้างบประมาณใหม่อีกครั้ง
+
+**สิ่งที่แก้ไข (Changes Detail):**
+1. **Friendly Session Expiry Warning:** ปรับแต่งหน้า Login (`auth.component.html`/`scss`) ให้แสดงกล่องข้อความแจ้งเตือนสีส้มแบบเป็นมิตรเมื่อเซสชันหมดอายุ ระบุชัดเจนว่า *"เซสชันการใช้งานหมดอายุ กรุณาเข้าสู่ระบบอีกครั้งเพื่อดำเนินการต่อ"*
+2. **Smart Return URL:** ปรับปรุง `auth.interceptor.ts` และ `auth.service.ts` ให้แนบ URL ปัจจุบัน (`returnUrl`) ไปกับ Query Params เมื่อเกิด 401 และเมื่อล็อกอิน/สมัครสมาชิกสำเร็จ ระบบจะพากลับไปยังหน้าที่กำลังใช้งานอยู่ (เช่น `/budgets`) ทันที
+3. **Suppressed Duplicate Alerts:** ปรับปรุง `budget-panel.component.ts` ไม่ให้ขึ้น Popup alert กวนใจเมื่อเกิด 401 โดยปล่อยให้ระบบนำทางไปหน้า Login พร้อมคำอธิบายอย่างราบรื่น
+
+**ไฟล์ที่เกี่ยวข้อง (Affected Files):**
+- `aift-frontend/src/app/services/auth.service.ts`
+- `aift-frontend/src/app/interceptors/auth.interceptor.ts`
+- `aift-frontend/src/app/components/auth/auth.component.ts`
+- `aift-frontend/src/app/components/auth/auth.component.html`
+- `aift-frontend/src/app/components/auth/auth.component.scss`
+- `aift-frontend/src/app/components/budget-panel/budget-panel.component.ts`
+- `CHANGELOG.md`
+
+---
+
 ### 📅 2026-09-23 14:19:00 (Local Time)
 **ประเภท:** `[Enhancement]` `[Frontend / UI]`  
 **หัวข้อ:** ปรับปรุง UI หน้าต่าง Model Limits Console ให้เป็นสไตล์ Minimal สะอาดตา ลดความแออัดของข้อมูล  

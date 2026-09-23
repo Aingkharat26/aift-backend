@@ -165,6 +165,7 @@ export class BudgetsService {
         spent: Math.round(spent * 100) / 100,
         remaining: Math.round(remaining * 100) / 100,
         percent: Math.round(percent * 10) / 10,
+        percentUsed: Math.round(percent * 10) / 10,
         status,
       };
     });
