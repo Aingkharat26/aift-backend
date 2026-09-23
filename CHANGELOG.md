@@ -14,6 +14,28 @@
 
 ## 🕒 บันทึกรายการเปลี่ยนแปลง (Change History)
 
+### 📅 2026-09-23 16:15:00 (Local Time)
+**ประเภท:** `[Feature]` `[Config / Infra]`  
+**หัวข้อ:** เพิ่มการโหลด Environment แยกตาม NODE_ENV (.env.development / .env.production)  
+**ปัญหาหรือความต้องการ (Issue / Requirement):**
+- แยกคอนฟิกระหว่างการพัฒนาและการ Deploy จริง โดยไม่ต้องคอยแก้ไขค่าสลับไปมา
+**สิ่งที่แก้ไข (Changes Detail):**
+1. **ConfigModule envFilePath:**
+   - ปรับปรุง `app.module.ts` ให้โหลด `.env.${process.env.NODE_ENV || 'development'}`, `.env.local`, `.env` ตามลำดับ
+2. **Environment Templates:**
+   - สร้าง `.env.development` พร้อมใช้งานบน Local (SQLite)
+   - สร้าง `.env.development.example` และ `.env.production.example`
+   - เพิ่ม `.env.development` และ `.env.production` ลงใน `.gitignore`
+**ไฟล์ที่แก้ไข (Affected Files):**
+- `src/app.module.ts`
+- `.env.development`
+- `.env.development.example`
+- `.env.production.example`
+- `.gitignore`
+- `CHANGELOG.md`
+
+---
+
 ### 📅 2026-09-23 16:06:00 (Local Time)
 **ประเภท:** `[Fix]` `[Config / Infra]`  
 **หัวข้อ:** แก้ไขปัญหา Render Deploy ติด ETIMEDOUT และ Port Scan Timeout  
