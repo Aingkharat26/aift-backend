@@ -14,6 +14,20 @@
 
 ## 🕒 บันทึกรายการเปลี่ยนแปลง (Change History)
 
+### 📅 2026-09-23 16:30:00 (Local Time)
+**ประเภท:** `[Fix]` `[Backend / CORS]`  
+**หัวข้อ:** ปรับปรุง CORS Configuration ให้รองรับการเชื่อมต่อจาก Vercel และ Mobile Client สมบูรณ์แบบ  
+**ปัญหาหรือความต้องการ (Issue / Requirement):**
+- ป้องกันปัญหา CORS Preflight Blocked เมื่อ Client เรียกใช้งาน API จากโดเมนภายนอก
+**สิ่งที่แก้ไข (Changes Detail):**
+1. **Explicit CORS Options (`main.ts`):**
+   - กำหนด `origin: true`, methods: `GET,HEAD,PUT,PATCH,POST,DELETE,OPTIONS` และ `credentials: true`
+**ไฟล์ที่แก้ไข (Affected Files):**
+- `src/main.ts`
+- `CHANGELOG.md`
+
+---
+
 ### 📅 2026-09-23 16:15:00 (Local Time)
 **ประเภท:** `[Feature]` `[Config / Infra]`  
 **หัวข้อ:** เพิ่มการโหลด Environment แยกตาม NODE_ENV (.env.development / .env.production)  
