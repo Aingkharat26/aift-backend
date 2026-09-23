@@ -1,5 +1,5 @@
 import { Module } from '@nestjs/common';
-import { ConfigModule } from '@nestjs/config';
+import { ConfigModule, ConfigService } from '@nestjs/config';
 import { TypeOrmModule } from '@nestjs/typeorm';
 import { AppController } from './app.controller';
 import { AppService } from './app.service';
@@ -17,13 +17,30 @@ import { BudgetsModule } from './budgets/budgets.module';
     ConfigModule.forRoot({
       isGlobal: true,
     }),
-    // ใช้ SQLite สำหรับ development (ไม่ต้องตั้งค่า postgres/password)
-    // หากจะ deploy กับ PostgreSQL ให้เปลี่ยนกลับเป็น type: 'postgres' พร้อม env DB_*
-    TypeOrmModule.forRoot({
-      type: 'better-sqlite3',
-      database: 'data/aift.sqlite',
-      entities: [Expense, Income, AiSummaryCache, Budget],
-      synchronize: true, // Auto-create tables (for development only)
+    TypeOrmModule.forRootAsync({
+      imports: [ConfigModule],
+      inject: [ConfigService],
+      useFactory: (configService: ConfigService) => {
+        const dbType = configService.get<string>('DB_TYPE', 'sqlite');
+        if (dbType === 'postgres') {
+          return {
+            type: 'postgres',
+            host: configService.get<string>('DB_HOST', 'localhost'),
+            port: Number(configService.get('DB_PORT', 5432)),
+            username: configService.get<string>('DB_USER', 'postgres'),
+            password: configService.get<string>('DB_PASS', 'postgres'),
+            database: configService.get<string>('DB_NAME', 'aift'),
+            entities: [Expense, Income, AiSummaryCache, Budget],
+            synchronize: true,
+          };
+        }
+        return {
+          type: 'better-sqlite3',
+          database: configService.get<string>('DB_DATABASE', 'data/aift.sqlite'),
+          entities: [Expense, Income, AiSummaryCache, Budget],
+          synchronize: true,
+        };
+      },
     }),
     ExpensesModule,
     IncomeModule,

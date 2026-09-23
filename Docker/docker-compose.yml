@@ -30,6 +30,13 @@ services:
     container_name: aift-backend
     ports:
       - "3000:3000"
+    environment:
+      - DB_TYPE=postgres
+      - DB_HOST=postgres
+      - DB_PORT=5432
+      - DB_USER=postgres
+      - DB_PASS=postgres
+      - DB_NAME=aift
     env_file:
       - ../.env
     depends_on:
