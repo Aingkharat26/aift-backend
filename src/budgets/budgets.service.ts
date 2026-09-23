@@ -14,25 +14,32 @@ export class BudgetsService {
     private expensesService: ExpensesService,
   ) {}
 
-  async getAll(): Promise<Budget[]> {
-    return this.budgetsRepository.find({ order: { category: 'ASC' } });
+  async getAll(userId: number): Promise<Budget[]> {
+    return this.budgetsRepository.find({
+      where: { userId },
+      order: { category: 'ASC' },
+    });
   }
 
-  async upsert(category: string, limit: number): Promise<Budget> {
+  async upsert(
+    category: string,
+    limit: number,
+    userId: number,
+  ): Promise<Budget> {
     const existing = await this.budgetsRepository.findOne({
-      where: { category },
+      where: { category, userId },
     });
     if (existing) {
       existing.limit = limit;
       return this.budgetsRepository.save(existing);
     }
     return this.budgetsRepository.save(
-      this.budgetsRepository.create({ category, limit }),
+      this.budgetsRepository.create({ category, limit, userId }),
     );
   }
 
-  async remove(id: number): Promise<void> {
-    const result = await this.budgetsRepository.delete(id);
+  async remove(id: number, userId: number): Promise<void> {
+    const result = await this.budgetsRepository.delete({ id, userId });
     if (!result.affected) {
       throw new NotFoundException(`Budget with id ${id} not found`);
     }
@@ -43,7 +50,7 @@ export class BudgetsService {
    * ใช้ค่าเฉลี่ยการใช้จ่ายย้อนหลัง 3 เดือนล่าสุด (รวมเดือนปัจจุบัน)
    * แล้วปัดขึ้นให้เป็นเลขกลม ๆ (หลัก 50)
    */
-  async getRecommendations() {
+  async getRecommendations(userId: number) {
     const now = new Date();
     const months: { year: number; month: number }[] = [];
     for (let i = 0; i < 3; i++) {
@@ -54,7 +61,11 @@ export class BudgetsService {
     // ยอดใช้จ่ายแยกรายเดือนของแต่ละหมวด
     const totalsByMonth: Record<string, Record<string, number>> = {};
     for (const { year, month } of months) {
-      const summary = await this.expensesService.getMonthlySummary(year, month);
+      const summary = await this.expensesService.getMonthlySummary(
+        userId,
+        year,
+        month,
+      );
       totalsByMonth[`${year}-${month}`] = summary.reduce(
         (acc, s) => {
           acc[s.category] = s.total;
@@ -64,7 +75,7 @@ export class BudgetsService {
       );
     }
 
-    const budgets = await this.getAll();
+    const budgets = await this.getAll(userId);
     const budgetByCategory = new Map(budgets.map((b) => [b.category, b.limit]));
 
     // รวมหมวดที่เคยใช้จ่ายใน 3 เดือนนี้
@@ -103,45 +114,80 @@ export class BudgetsService {
       });
     }
 
-    recommendations.sort((a, b) => b.avgMonthly - a.avgMonthly);
+    // เรียงตาม recommendedBudget จากมากไปน้อย
+    recommendations.sort((a, b) => b.recommendedBudget - a.recommendedBudget);
+
     return recommendations;
   }
 
   /**
-   * สถานะการใช้จ่ายเดือนที่ระบุ เทียบกับงบที่ตั้งไว้
-   * status: ok (< 80%) | warning (80-100%) | exceeded (> 100%)
+   * คำนวณสถานะงบประมาณรายหมวดของเดือนที่ระบุ:
+   * คืนค่ารายการงบ พร้อมยอดใช้จริง, ยอดคงเหลือ, % ที่ใช้, และสถานะ (ok / warning / exceeded)
    */
-  async getStatus(year?: number, month?: number) {
+  async getStatus(userId: number, year?: number, month?: number) {
     const now = new Date();
     const targetYear = year ?? now.getFullYear();
     const targetMonth = month !== undefined ? month : now.getMonth() + 1; // 1-indexed
 
-    const [budgets, summary] = await Promise.all([
-      this.getAll(),
-      this.expensesService.getMonthlySummary(targetYear, targetMonth),
-    ]);
+    const budgets = await this.getAll(userId);
+    const monthlySummary = await this.expensesService.getMonthlySummary(
+      userId,
+      targetYear,
+      targetMonth,
+    );
+    const spentByCategory = new Map(
+      monthlySummary.map((s) => [s.category, s.total]),
+    );
 
-    const spentByCategory = new Map(summary.map((s) => [s.category, s.total]));
+    let totalBudget = 0;
+    let totalSpent = 0;
 
-    return budgets.map((b) => {
-      const spent = spentByCategory.get(b.category) ?? 0;
-      const percentUsed = b.limit > 0 ? (spent / b.limit) * 100 : 0;
-      const status =
-        percentUsed >= 100
-          ? 'exceeded'
-          : percentUsed >= WARNING_THRESHOLD * 100
-            ? 'warning'
-            : 'ok';
+    const items = budgets.map((b) => {
+      const spent = spentByCategory.get(b.category) || 0;
+      const limit = Number(b.limit);
+      const remaining = limit - spent;
+      const percent = limit > 0 ? (spent / limit) * 100 : 0;
+
+      let status: 'ok' | 'warning' | 'exceeded' = 'ok';
+      if (spent > limit) {
+        status = 'exceeded';
+      } else if (limit > 0 && spent / limit >= WARNING_THRESHOLD) {
+        status = 'warning';
+      }
+
+      totalBudget += limit;
+      totalSpent += spent;
 
       return {
         id: b.id,
         category: b.category,
-        limit: b.limit,
+        limit,
         spent: Math.round(spent * 100) / 100,
-        remaining: Math.round(Math.max(0, b.limit - spent) * 100) / 100,
-        percentUsed: Math.round(percentUsed * 10) / 10,
+        remaining: Math.round(remaining * 100) / 100,
+        percent: Math.round(percent * 10) / 10,
         status,
       };
     });
+
+    const totalRemaining = totalBudget - totalSpent;
+    const totalPercent =
+      totalBudget > 0 ? (totalSpent / totalBudget) * 100 : 0;
+    let overallStatus: 'ok' | 'warning' | 'exceeded' = 'ok';
+    if (totalSpent > totalBudget && totalBudget > 0) {
+      overallStatus = 'exceeded';
+    } else if (totalBudget > 0 && totalSpent / totalBudget >= WARNING_THRESHOLD) {
+      overallStatus = 'warning';
+    }
+
+    return {
+      year: targetYear,
+      month: targetMonth,
+      items,
+      totalBudget: Math.round(totalBudget * 100) / 100,
+      totalSpent: Math.round(totalSpent * 100) / 100,
+      totalRemaining: Math.round(totalRemaining * 100) / 100,
+      totalPercent: Math.round(totalPercent * 10) / 10,
+      overallStatus,
+    };
   }
 }

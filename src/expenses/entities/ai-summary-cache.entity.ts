@@ -4,12 +4,19 @@ import {
   PrimaryGeneratedColumn,
   CreateDateColumn,
   UpdateDateColumn,
+  Unique,
+  Index,
 } from 'typeorm';
 
-@Entity()
+@Entity('ai_summary_cache')
+@Unique(['year', 'month', 'userId'])
 export class AiSummaryCache {
   @PrimaryGeneratedColumn()
   id: number;
+
+  @Index()
+  @Column({ nullable: true })
+  userId: number;
 
   @Column()
   year: number;

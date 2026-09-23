@@ -17,18 +17,22 @@ export class ExpensesService {
     private incomeService: IncomeService,
   ) {}
 
-  async processChat(text: string): Promise<Expense> {
+  async processChat(text: string, userId: number): Promise<Expense> {
     const aiResult = await this.aiService.extractExpenseData(text);
 
     const expense = new Expense();
     expense.item = aiResult.item;
     expense.amount = aiResult.amount;
     expense.category = aiResult.category;
+    expense.userId = userId;
 
     return this.expensesRepository.save(expense);
   }
 
-  async getDailyExpenses(dateStr?: string): Promise<Expense[]> {
+  async getDailyExpenses(
+    userId: number,
+    dateStr?: string,
+  ): Promise<Expense[]> {
     let targetDate: Date;
     if (dateStr) {
       // Parse YYYY-MM-DD as local time to avoid UTC shift
@@ -46,13 +50,15 @@ export class ExpensesService {
 
     return this.expensesRepository
       .createQueryBuilder('expense')
-      .where('expense.date >= :startOfDay', { startOfDay })
+      .where('expense.userId = :userId', { userId })
+      .andWhere('expense.date >= :startOfDay', { startOfDay })
       .andWhere('expense.date <= :endOfDay', { endOfDay })
       .orderBy('expense.date', 'DESC')
       .getMany();
   }
 
   async getMonthlySummary(
+    userId: number,
     year?: number,
     month?: number,
   ): Promise<{ category: string; total: number }[]> {
@@ -75,7 +81,8 @@ export class ExpensesService {
       .createQueryBuilder('expense')
       .select('expense.category', 'category')
       .addSelect('SUM(expense.amount)', 'total')
-      .where('expense.date >= :startOfMonth', { startOfMonth })
+      .where('expense.userId = :userId', { userId })
+      .andWhere('expense.date >= :startOfMonth', { startOfMonth })
       .andWhere('expense.date <= :endOfMonth', { endOfMonth })
       .groupBy('expense.category')
       .getRawMany();
@@ -86,18 +93,27 @@ export class ExpensesService {
     }));
   }
 
-  async processReceiptImage(base64: string, mimeType: string): Promise<Expense> {
-    const aiResult = await this.aiService.extractExpenseFromReceipt(base64, mimeType);
+  async processReceiptImage(
+    base64: string,
+    mimeType: string,
+    userId: number,
+  ): Promise<Expense> {
+    const aiResult = await this.aiService.extractExpenseFromReceipt(
+      base64,
+      mimeType,
+    );
 
     const expense = new Expense();
     expense.item = aiResult.item;
     expense.amount = aiResult.amount;
     expense.category = aiResult.category;
+    expense.userId = userId;
 
     return this.expensesRepository.save(expense);
   }
 
   async getAiMonthlySummary(
+    userId: number,
     year?: number,
     month?: number,
     force = false,
@@ -112,13 +128,23 @@ export class ExpensesService {
     const prevYear = prevDate.getFullYear();
     const prevMonth = prevDate.getMonth() + 1;
 
-    const currentExpenses = await this.getMonthlySummary(targetYear, targetMonth);
-    const currentIncome = await this.incomeService.getMonthlyIncome(
+    const currentExpenses = await this.getMonthlySummary(
+      userId,
       targetYear,
       targetMonth,
     );
-    const previousExpenses = await this.getMonthlySummary(prevYear, prevMonth);
+    const currentIncome = await this.incomeService.getMonthlyIncome(
+      userId,
+      targetYear,
+      targetMonth,
+    );
+    const previousExpenses = await this.getMonthlySummary(
+      userId,
+      prevYear,
+      prevMonth,
+    );
     const previousIncome = await this.incomeService.getMonthlyIncome(
+      userId,
       prevYear,
       prevMonth,
     );
@@ -126,10 +152,11 @@ export class ExpensesService {
     const currentTotal = currentExpenses.reduce((sum, e) => sum + e.total, 0);
     const previousTotal = previousExpenses.reduce((sum, e) => sum + e.total, 0);
 
-    const monthLabel = new Date(targetYear, targetMonth - 1, 1).toLocaleDateString(
-      'th-TH',
-      { month: 'long', year: 'numeric' },
-    );
+    const monthLabel = new Date(
+      targetYear,
+      targetMonth - 1,
+      1,
+    ).toLocaleDateString('th-TH', { month: 'long', year: 'numeric' });
     const prevLabel = new Date(prevYear, prevMonth - 1, 1).toLocaleDateString(
       'th-TH',
       { month: 'long', year: 'numeric' },
@@ -141,6 +168,7 @@ export class ExpensesService {
       await this.aiSummaryCacheRepository.delete({
         year: targetYear,
         month: targetMonth,
+        userId,
       });
       return {
         summary: `เดือน${monthLabel} ยังไม่มีรายการ บันทึกรับรายจ่ายก่อน แล้ว AI จะวิเคราะห์ให้ครับ`,
@@ -152,7 +180,7 @@ export class ExpensesService {
     // ไม่บังคับคำนวณใหม่ → อ่านจาก cache ก่อน (ประหยัด quota ตอน F5/เปลี่ยนเดือน)
     if (!force) {
       const cached = await this.aiSummaryCacheRepository.findOne({
-        where: { year: targetYear, month: targetMonth },
+        where: { year: targetYear, month: targetMonth, userId },
       });
       if (cached) {
         return {
@@ -203,7 +231,7 @@ export class ExpensesService {
 
     // เก็บ cache ไว้ให้ F5 ครั้งถัดไปอ่านโดยไม่ต้องเรียก AI
     const existing = await this.aiSummaryCacheRepository.findOne({
-      where: { year: targetYear, month: targetMonth },
+      where: { year: targetYear, month: targetMonth, userId },
     });
     if (existing) {
       existing.summary = summary;
@@ -216,6 +244,7 @@ export class ExpensesService {
           month: targetMonth,
           summary,
           generated,
+          userId,
         }),
       );
     }
@@ -225,9 +254,12 @@ export class ExpensesService {
 
   async updateExpense(
     id: number,
+    userId: number,
     data: { item?: string; amount?: number; category?: string },
   ): Promise<Expense> {
-    const expense = await this.expensesRepository.findOne({ where: { id } });
+    const expense = await this.expensesRepository.findOne({
+      where: { id, userId },
+    });
     if (!expense) {
       throw new NotFoundException(`Expense with id ${id} not found`);
     }
@@ -239,7 +271,10 @@ export class ExpensesService {
     return this.expensesRepository.save(expense);
   }
 
-  async deleteExpense(id: number): Promise<void> {
-    await this.expensesRepository.delete(id);
+  async deleteExpense(id: number, userId: number): Promise<void> {
+    const result = await this.expensesRepository.delete({ id, userId });
+    if (!result.affected) {
+      throw new NotFoundException(`Expense with id ${id} not found`);
+    }
   }
 }

@@ -5,13 +5,28 @@ import {
   CreateDateColumn,
   UpdateDateColumn,
   Unique,
+  ManyToOne,
+  JoinColumn,
+  Index,
 } from 'typeorm';
+import { User } from '../../auth/entities/user.entity';
 
-@Entity()
-@Unique(['category'])
+@Entity('budgets')
+@Unique(['category', 'userId'])
 export class Budget {
   @PrimaryGeneratedColumn()
   id: number;
+
+  @Index()
+  @Column({ nullable: true })
+  userId: number;
+
+  @ManyToOne(() => User, (user) => user.budgets, {
+    onDelete: 'CASCADE',
+    nullable: true,
+  })
+  @JoinColumn({ name: 'userId' })
+  user: User;
 
   @Column()
   category: string;

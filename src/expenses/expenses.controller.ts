@@ -9,21 +9,29 @@ import {
   Query,
   BadRequestException,
   InternalServerErrorException,
+  UseGuards,
 } from '@nestjs/common';
 import { ExpensesService } from './expenses.service';
+import { JwtAuthGuard } from '../auth/jwt-auth.guard';
+import { CurrentUser } from '../auth/current-user.decorator';
+import { User } from '../auth/entities/user.entity';
 
+@UseGuards(JwtAuthGuard)
 @Controller('expenses')
 export class ExpensesController {
   constructor(private readonly expensesService: ExpensesService) {}
 
   @Post('chat')
-  async processChat(@Body('text') text: string) {
+  async processChat(
+    @CurrentUser() user: User,
+    @Body('text') text: string,
+  ) {
     if (!text) {
       throw new BadRequestException('Text is required');
     }
 
     try {
-      const result = await this.expensesService.processChat(text);
+      const result = await this.expensesService.processChat(text, user.id);
       return { success: true, data: result };
     } catch (error) {
       if (error.message === 'AI_COULD_NOT_UNDERSTAND') {
@@ -42,6 +50,7 @@ export class ExpensesController {
 
   @Post('receipt')
   async processReceipt(
+    @CurrentUser() user: User,
     @Body() body: { image?: string; mimeType?: string },
   ) {
     if (!body.image) {
@@ -52,6 +61,7 @@ export class ExpensesController {
       const result = await this.expensesService.processReceiptImage(
         body.image,
         body.mimeType || 'image/jpeg',
+        user.id,
       );
       return { success: true, data: result };
     } catch (error) {
@@ -69,17 +79,22 @@ export class ExpensesController {
   }
 
   @Get('daily')
-  async getDaily(@Query('date') date?: string) {
-    const data = await this.expensesService.getDailyExpenses(date);
+  async getDaily(
+    @CurrentUser() user: User,
+    @Query('date') date?: string,
+  ) {
+    const data = await this.expensesService.getDailyExpenses(user.id, date);
     return { success: true, data };
   }
 
   @Get('summary')
   async getSummary(
+    @CurrentUser() user: User,
     @Query('year') year?: string,
     @Query('month') month?: string,
   ) {
     const data = await this.expensesService.getMonthlySummary(
+      user.id,
       year ? parseInt(year) : undefined,
       month ? parseInt(month) : undefined,
     );
@@ -88,11 +103,13 @@ export class ExpensesController {
 
   @Get('ai-summary')
   async getAiSummary(
+    @CurrentUser() user: User,
     @Query('year') year?: string,
     @Query('month') month?: string,
   ) {
     // อ่านจาก cache (ไม่เรียก AI ใหม่) — ใช้ตอนโหลดหน้า/เปลี่ยนเดือน
     const data = await this.expensesService.getAiMonthlySummary(
+      user.id,
       year ? parseInt(year) : undefined,
       month ? parseInt(month) : undefined,
       false,
@@ -102,11 +119,13 @@ export class ExpensesController {
 
   @Post('ai-summary/refresh')
   async refreshAiSummary(
+    @CurrentUser() user: User,
     @Body('year') year?: number,
     @Body('month') month?: number,
   ) {
     // บังคับคำนวณใหม่ด้วย AI + เก็บ cache — ใช้ตอนเพิ่ม/แก้ไข/ลบรายการ
     const data = await this.expensesService.getAiMonthlySummary(
+      user.id,
       year,
       month,
       true,
@@ -116,16 +135,24 @@ export class ExpensesController {
 
   @Patch(':id')
   async updateExpense(
+    @CurrentUser() user: User,
     @Param('id') id: number,
     @Body() data: { item?: string; amount?: number; category?: string },
   ) {
-    const result = await this.expensesService.updateExpense(id, data);
+    const result = await this.expensesService.updateExpense(
+      id,
+      user.id,
+      data,
+    );
     return { success: true, data: result };
   }
 
   @Delete(':id')
-  async deleteExpense(@Param('id') id: number) {
-    await this.expensesService.deleteExpense(id);
+  async deleteExpense(
+    @CurrentUser() user: User,
+    @Param('id') id: number,
+  ) {
+    await this.expensesService.deleteExpense(id, user.id);
     return { success: true };
   }
 }

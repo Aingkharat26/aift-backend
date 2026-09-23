@@ -11,6 +11,9 @@ import { Income } from './income/entities/income.entity';
 import { IncomeModule } from './income/income.module';
 import { Budget } from './budgets/entities/budget.entity';
 import { BudgetsModule } from './budgets/budgets.module';
+import { AuthModule } from './auth/auth.module';
+import { AdminModule } from './admin/admin.module';
+import { User } from './auth/entities/user.entity';
 
 @Module({
   imports: [
@@ -22,6 +25,7 @@ import { BudgetsModule } from './budgets/budgets.module';
       inject: [ConfigService],
       useFactory: (configService: ConfigService) => {
         const dbType = configService.get<string>('DB_TYPE', 'sqlite');
+        const entities = [Expense, Income, AiSummaryCache, Budget, User];
         if (dbType === 'postgres') {
           return {
             type: 'postgres',
@@ -30,18 +34,23 @@ import { BudgetsModule } from './budgets/budgets.module';
             username: configService.get<string>('DB_USER', 'postgres'),
             password: configService.get<string>('DB_PASS', 'postgres'),
             database: configService.get<string>('DB_NAME', 'aift'),
-            entities: [Expense, Income, AiSummaryCache, Budget],
+            entities,
             synchronize: true,
           };
         }
         return {
           type: 'better-sqlite3',
-          database: configService.get<string>('DB_DATABASE', 'data/aift.sqlite'),
-          entities: [Expense, Income, AiSummaryCache, Budget],
+          database: configService.get<string>(
+            'DB_DATABASE',
+            'data/aift.sqlite',
+          ),
+          entities,
           synchronize: true,
         };
       },
     }),
+    AuthModule,
+    AdminModule,
     ExpensesModule,
     IncomeModule,
     AiModule,
