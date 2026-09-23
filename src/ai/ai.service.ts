@@ -60,16 +60,35 @@ export class AiService implements OnModuleInit {
           parsedData.action === 'invalid_input' ||
           (parsedData.amount === 0 && parsedData.item === 'unknown')
         ) {
+          const fallback = this.fallbackExtractExpense(text);
+          if (fallback) {
+            console.timeEnd(logLabel);
+            return fallback;
+          }
           throw new Error('AI_COULD_NOT_UNDERSTAND');
         }
 
         console.timeEnd(logLabel);
         return parsedData;
       } catch (e: any) {
+        if (e.message === 'AI_COULD_NOT_UNDERSTAND') {
+          const fallback = this.fallbackExtractExpense(text);
+          if (fallback) {
+            console.timeEnd(logLabel);
+            return fallback;
+          }
+          throw e;
+        }
         if (!this.handleModelError(e, modelName)) {
           break;
         }
       }
+    }
+
+    const fallback = this.fallbackExtractExpense(text);
+    if (fallback) {
+      console.timeEnd(logLabel);
+      return fallback;
     }
 
     console.timeEnd(logLabel);
@@ -196,12 +215,11 @@ export class AiService implements OnModuleInit {
   
   STRICT RULES:
   1. Extract the SPECIFIC source of income (e.g., "เงินเดือน", "ขายของ", "แม่ให้มา").
-  2. DO NOT use generic words like "income", "รับ", or "รายรับ" as the source name unless it's the only word provided.
-  3. If the user says "รายรับจากแม่ 500", the source should be "จากแม่" or "แม่ให้มา".
-  4. If amount is not clearly stated, use 0.
-  5. Keyboard Fix: If "ถจ" appear, it means "50", "ค" means "8", "ต" means "9".
-  6. If the input text is gibberish, nonsense, or contains no clear income intent, 
-     set "action" to "invalid_input" and "source" to "unknown".
+  2. If the user only enters an amount or mentions generic income without a specific source (e.g., "500", "500 บาท", "รายรับ 500", "ได้เงิน 500"), set "source" to "รายรับทั่วไป" and extract the amount.
+  3. If amount is not clearly stated, use 0.
+  4. Keyboard Fix: If "ถจ" appear, it means "50", "ค" means "8", "ต" means "9".
+  5. DO NOT set "invalid_input" if there is a number or money amount in the text. Treat it as valid income.
+  6. Only if the input text has NO numbers and NO meaningful words at all, set "action" to "invalid_input" and "source" to "unknown".
   
   Text to extract: "${text}"
   Return ONLY a JSON object like: {"source": string, "amount": number, "action": "record_income"}`;
@@ -214,19 +232,85 @@ export class AiService implements OnModuleInit {
           parsedData.action === 'invalid_input' ||
           (parsedData.amount === 0 && parsedData.source === 'unknown')
         ) {
+          const fallback = this.fallbackExtractIncome(text);
+          if (fallback) {
+            console.timeEnd(logLabel);
+            return fallback;
+          }
           throw new Error('AI_COULD_NOT_UNDERSTAND');
         }
 
         console.timeEnd(logLabel);
         return parsedData;
       } catch (e: any) {
-        if (e.message === 'AI_COULD_NOT_UNDERSTAND') throw e;
+        if (e.message === 'AI_COULD_NOT_UNDERSTAND') {
+          const fallback = this.fallbackExtractIncome(text);
+          if (fallback) {
+            console.timeEnd(logLabel);
+            return fallback;
+          }
+          throw e;
+        }
         continue; // Try next model
       }
     }
 
+    const fallback = this.fallbackExtractIncome(text);
+    if (fallback) {
+      console.timeEnd(logLabel);
+      return fallback;
+    }
+
     console.timeEnd(logLabel);
     throw new Error('AI_COULD_NOT_UNDERSTAND');
+  }
+
+  private fallbackExtractIncome(text: string): { source: string; amount: number; action: string } | null {
+    const thaiToEngMap: Record<string, string> = {
+      'ๅ': '1', 'ภ': '4', 'ถ': '5', 'ุ': '6', 'ึ': '7', 'ค': '8', 'ต': '9', 'จ': '0',
+    };
+    const normalized = text.split('').map(c => thaiToEngMap[c] || c).join('');
+    const numMatch = normalized.match(/(\d+[\d,]*(?:\.\d+)?)/);
+    if (!numMatch) return null;
+
+    const amount = parseFloat(numMatch[1].replace(/,/g, ''));
+    if (isNaN(amount) || amount <= 0) return null;
+
+    let source = normalized
+      .replace(numMatch[0], '')
+      .replace(/บาท|บ\.|baht/gi, '')
+      .replace(/รายรับ|เงินเข้า|ได้เงิน|รับ/g, '')
+      .trim();
+
+    if (!source) {
+      source = 'รายรับทั่วไป';
+    }
+
+    return { source, amount, action: 'record_income' };
+  }
+
+  private fallbackExtractExpense(text: string): { item: string; amount: number; category: string; action: string } | null {
+    const thaiToEngMap: Record<string, string> = {
+      'ๅ': '1', 'ภ': '4', 'ถ': '5', 'ุ': '6', 'ึ': '7', 'ค': '8', 'ต': '9', 'จ': '0',
+    };
+    const normalized = text.split('').map(c => thaiToEngMap[c] || c).join('');
+    const numMatch = normalized.match(/(\d+[\d,]*(?:\.\d+)?)/);
+    if (!numMatch) return null;
+
+    const amount = parseFloat(numMatch[1].replace(/,/g, ''));
+    if (isNaN(amount) || amount <= 0) return null;
+
+    let item = normalized
+      .replace(numMatch[0], '')
+      .replace(/บาท|บ\.|baht/gi, '')
+      .replace(/รายจ่าย|ค่า|ซื้อ/g, '')
+      .trim();
+
+    if (!item) {
+      item = 'รายจ่ายทั่วไป';
+    }
+
+    return { item, amount, category: 'อื่นๆ', action: 'record_expense' };
   }
 
   private async generateAndParseJSON(modelName: string, prompt: string): Promise<any> {

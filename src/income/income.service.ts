@@ -12,24 +12,33 @@ export class IncomeService {
     private aiService: AiService,
   ) {}
 
-  async processChat(text: string): Promise<Income> {
+  async processChat(text: string, userId: number): Promise<Income> {
     const aiResult = await this.aiService.extractIncomeData(text);
 
     const income = new Income();
     income.source = aiResult.source;
     income.amount = aiResult.amount;
+    income.userId = userId;
 
     return this.incomeRepository.save(income);
   }
 
-  async create(data: { source: string; amount: number }): Promise<Income> {
+  async create(
+    data: { source: string; amount: number },
+    userId: number,
+  ): Promise<Income> {
     const income = new Income();
     income.source = data.source;
     income.amount = data.amount;
+    income.userId = userId;
     return this.incomeRepository.save(income);
   }
 
-  async getMonthlyIncome(year?: number, month?: number): Promise<number> {
+  async getMonthlyIncome(
+    userId: number,
+    year?: number,
+    month?: number,
+  ): Promise<number> {
     const now = new Date();
     const targetYear = year ?? now.getFullYear();
     const targetMonth = month !== undefined ? month - 1 : now.getMonth();
@@ -48,14 +57,18 @@ export class IncomeService {
     const result = await this.incomeRepository
       .createQueryBuilder('income')
       .select('SUM(income.amount)', 'total')
-      .where('income.date >= :startOfMonth', { startOfMonth })
+      .where('income.userId = :userId', { userId })
+      .andWhere('income.date >= :startOfMonth', { startOfMonth })
       .andWhere('income.date <= :endOfMonth', { endOfMonth })
       .getRawOne();
 
-    return parseFloat(result.total || 0);
+    return parseFloat(result?.total || 0);
   }
 
-  async getDailyIncome(dateStr?: string): Promise<Income[]> {
+  async getDailyIncome(
+    userId: number,
+    dateStr?: string,
+  ): Promise<Income[]> {
     let targetDate: Date;
     if (dateStr) {
       // Parse YYYY-MM-DD as local time to avoid UTC shift
@@ -73,7 +86,8 @@ export class IncomeService {
 
     return this.incomeRepository
       .createQueryBuilder('income')
-      .where('income.date >= :startOfDay', { startOfDay })
+      .where('income.userId = :userId', { userId })
+      .andWhere('income.date >= :startOfDay', { startOfDay })
       .andWhere('income.date <= :endOfDay', { endOfDay })
       .orderBy('income.date', 'DESC')
       .getMany();
@@ -81,9 +95,12 @@ export class IncomeService {
 
   async update(
     id: number,
+    userId: number,
     data: { source?: string; amount?: number },
   ): Promise<Income> {
-    const income = await this.incomeRepository.findOne({ where: { id } });
+    const income = await this.incomeRepository.findOne({
+      where: { id, userId },
+    });
     if (!income) {
       throw new NotFoundException(`Income with id ${id} not found`);
     }
@@ -94,7 +111,10 @@ export class IncomeService {
     return this.incomeRepository.save(income);
   }
 
-  async delete(id: number): Promise<void> {
-    await this.incomeRepository.delete(id);
+  async delete(id: number, userId: number): Promise<void> {
+    const result = await this.incomeRepository.delete({ id, userId });
+    if (!result.affected) {
+      throw new NotFoundException(`Income with id ${id} not found`);
+    }
   }
 }
