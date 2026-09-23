@@ -118,15 +118,31 @@ GEMINI_API_KEY=AIzaSyxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxx
    - หากไม่ได้ระบุ `DB_TYPE=postgres` ระบบจะใช้ `better-sqlite3` ชี้ไปที่ไฟล์ `data/aift.sqlite` ในเครื่องทันที
    - ไม่จำเป็นต้องเปิดโปรแกรม PostgreSQL ในเครื่อง
 
-### โครงสร้าง Entities ทั้ง 4 ตาราง
-1. `Expense` (`expenses`): บันทึกรายจ่าย (id, item, amount, category, date, created_at)
-2. `Income` (`incomes`): บันทึกรายรับ (id, source, amount, date, created_at)
-3. `AiSummaryCache` (`ai_summary_cache`): แคชสรุปรายเดือนของ AI (year, month, summary, created_at)
-4. `Budget` (`budgets`): งบประมาณรายหมวด (id, category, amount, created_at, updated_at)
+### โครงสร้าง Entities ทั้ง 5 ตาราง (Data Isolation per Account)
+1. `User` (`users`): บัญชีผู้ใช้ (id, username, password, displayName, createdAt, updatedAt)
+2. `Expense` (`expenses`): บันทึกรายจ่าย ผูกกับ `userId` (id, userId, item, amount, category, date, created_at)
+3. `Income` (`incomes`): บันทึกรายรับ ผูกกับ `userId` (id, userId, source, amount, date, created_at)
+4. `AiSummaryCache` (`ai_summary_cache`): แคชสรุปรายเดือนของ AI ผูกกับ `userId` (id, userId, year, month, summary, created_at)
+5. `Budget` (`budgets`): งบประมาณรายหมวด ผูกกับ `userId` (id, userId, category, limit, created_at, updated_at) - Unique `[category, userId]`
 
 ---
 
-## 🤖 5. การทำงานของระบบ AI (Gemini AI Services)
+## 🔐 5. ระบบสมาชิกและการแยกข้อมูลราย Account (Authentication & Isolation)
+
+1. **Authentication Stack:**
+   - ใช้ **Passport JWT** + **bcrypt** สำหรับการ Hash รหัสผ่านและ Sign Token (อายุ 30 วันสำหรับ Persistent Login)
+   - ป้องกัน API ทั้งหมดด้วย `JwtAuthGuard` ดึงผู้ใช้ผ่าน `@CurrentUser()`
+2. **Data Isolation (100%):**
+   - ทุกคำสั่ง Query (ค้นหา, สร้าง, แก้ไข, ลบ) ถูก Scope ด้วย `userId` ของผู้ใช้ที่กำลังล็อกอินอยู่เท่านั้น
+   - ผู้ใช้แต่ละคนจะไม่สามารถมองเห็น หรือแก้ไขข้อมูลของคนอื่นได้โดยเด็ดขาด
+3. **Frontend Integration:**
+   - `AuthService` จัดการ State ด้วย Angular Signals และเก็บ JWT Token ใน `localStorage`
+   - `authInterceptor` แนบ Header `Authorization: Bearer <token>` อัตโนมัติในทุกคำขอ API
+   - `authGuard` ป้องกันหน้า Dashboard และ Budgets หากยังไม่ล็อกอินจะ redirect ไปที่ `/login`
+
+---
+
+## 🤖 6. การทำงานของระบบ AI (Gemini AI Services)
 
 โค้ดหลักอยู่ที่ `aift-backend/src/ai/ai.service.ts`:
 
@@ -136,19 +152,19 @@ GEMINI_API_KEY=AIzaSyxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxx
    - รับรูปถ่ายใบเสร็จในรูปแบบ base64 (รองรับรูปขนาดใหญ่ ขยาย body limit ไว้ 15MB)
    - AI สกัดชื่อร้าน, ราคารวม, และจัดหมวดหมู่อัตโนมัติ
 3. **Monthly AI Summary & Cache (`GET /expenses/ai-summary`):**
-   - คำนวณสรุปพฤติกรรมการใช้จ่ายรายเดือน เปรียบเทียบกับเดือนก่อนหน้า และให้คำแนะนำ
-   - มีระบบ Cache ในตาราง `ai_summary_cache` เพื่อไม่ให้เรียก Gemini ซ้ำทุกครั้งที่รีเฟรชหน้าจอ (จะคำนวณใหม่เฉพาะเมื่อกด refresh หรือมีรายการเงินเข้า/ออกเปลี่ยนแปลง)
+   - คำนวณสรุปพฤติกรรมการใช้จ่ายรายเดือน เปรียบเทียบกับเดือนก่อนหน้า และให้คำแนะนำ (คำนวณแยกเฉพาะราย Account)
+   - มีระบบ Cache ในตาราง `ai_summary_cache` ต่อผู้ใช้และต่อเดือน
 4. **Resilient Model Fallback Waterfall:**
    - หากโมเดลใดโมเดลหนึ่งโควตาเต็มหรือขัดข้อง ระบบจะ fallback เรียงตามลำดับความเร็วและความประหยัด พร้อม fallback สำเร็จรูปภาษาไทย
 
 ---
 
-## 💰 6. ตรรกะระบบจัดการงบประมาณ (Budgets Engine)
+## 💰 7. ตรรกะระบบจัดการงบประมาณ (Budgets Engine)
 
 โค้ดหลักอยู่ที่ `aift-backend/src/budgets/budgets.service.ts`:
 
 1. **งบแนะนำจากพฤติกรรมจริง (`GET /budgets/recommendations`):**
-   - คำนวณจากค่าเฉลี่ยการใช้จ่ายจริงย้อนหลัง 3 เดือนล่าสุดในแต่ละหมวด
+   - คำนวณจากค่าเฉลี่ยการใช้จ่ายจริงย้อนหลัง 3 เดือนล่าสุดในแต่ละหมวดของ Account นั้นๆ
    - นำค่าเฉลี่ยมาปัดเศษขึ้นเป็นเลขกลมๆ (ปัดขึ้นหลัก 50 บาท เช่น 210 -> 250)
 2. **การติดตามสถานะ (`GET /budgets/status?year=&month=`):**
    - `ok`: ใช้น้อยกว่า 80% (หลอดสีเขียว)
@@ -157,7 +173,14 @@ GEMINI_API_KEY=AIzaSyxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxx
 
 ---
 
-## 📡 7. สรุป Endpoint สำคัญ (API Reference)
+## 📡 8. สรุป Endpoint สำคัญ (API Reference)
+
+> **หมายเหตุ:** ทุก Endpoint (ยกเว้น `/auth/register` และ `/auth/login`) จำเป็นต้องแนบ Header `Authorization: Bearer <token>`
+
+### หมวดสมาชิกและการเข้าสู่ระบบ (Authentication)
+- `POST /auth/register` : สมัครสมาชิกใหม่ `{ username, password, displayName }`
+- `POST /auth/login` : เข้าสู่ระบบ `{ username, password }` ได้รับ JWT token + user data
+- `GET /auth/me` : ดึงข้อมูลโปรไฟล์ผู้ใช้งานปัจจุบัน
 
 ### หมวดรายจ่าย (Expenses)
 - `POST /expenses/chat` : ส่งข้อความแชท ให้ AI แปลงและบันทึกรายจ่าย
