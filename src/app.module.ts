@@ -25,8 +25,21 @@ import { User } from './auth/entities/user.entity';
       inject: [ConfigService],
       useFactory: (configService: ConfigService) => {
         const dbType = configService.get<string>('DB_TYPE', 'sqlite');
+        const databaseUrl = configService.get<string>('DATABASE_URL');
         const entities = [Expense, Income, AiSummaryCache, Budget, User];
-        if (dbType === 'postgres') {
+
+        if (dbType === 'postgres' || databaseUrl) {
+          const sslRequired =
+            configService.get<string>('DB_SSL', 'true') === 'true';
+          if (databaseUrl) {
+            return {
+              type: 'postgres',
+              url: databaseUrl,
+              ssl: sslRequired ? { rejectUnauthorized: false } : false,
+              entities,
+              synchronize: true,
+            };
+          }
           return {
             type: 'postgres',
             host: configService.get<string>('DB_HOST', 'localhost'),
@@ -34,6 +47,7 @@ import { User } from './auth/entities/user.entity';
             username: configService.get<string>('DB_USER', 'postgres'),
             password: configService.get<string>('DB_PASS', 'postgres'),
             database: configService.get<string>('DB_NAME', 'aift'),
+            ssl: sslRequired ? { rejectUnauthorized: false } : false,
             entities,
             synchronize: true,
           };
