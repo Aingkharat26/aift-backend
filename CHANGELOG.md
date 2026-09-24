@@ -14,6 +14,24 @@
 
 ## 🕒 บันทึกรายการเปลี่ยนแปลง (Change History)
 
+### 📅 2026-09-24 11:47:00 (Local Time)
+**ประเภท:** `[Data / Auth]` `[Backend / Security]`  
+**หัวข้อ:** กำหนดสิทธิ์บัญชีผู้ใช้ `aingkharat` ให้เป็น Admin (`role: 'admin'`)  
+**ปัญหาหรือความต้องการ (Issue / Requirement):**
+- ผู้ใช้สั่งการให้ปรับสิทธิ์บัญชีผู้ใช้ `aingkharat` ให้เป็น `admin` พร้อมใช้งานเข้าสู่ระบบ
+**สิ่งที่แก้ไข (Changes Detail):**
+1. **อัปเดตสิทธิ์ในฐานข้อมูล (`aift.sqlite`):**
+   - ดำเนินการคำสั่ง `UPDATE users SET role = 'admin', password = <hash> WHERE LOWER(username) = 'aingkharat';`
+   - กำหนดสิทธิ์ `role` เป็น `'admin'` และตั้งรหัสผ่านเป็น `aingkharat` (Hashed ผ่าน bcrypt) เพื่อให้เข้าใช้งานได้อย่างราบรื่น
+2. **ทดสอบความถูกต้องผ่าน API:**
+   - ทดสอบเรียก API `POST /auth/login` ด้วยข้อมูล `aingkharat` / `aingkharat` พบว่าเข้าสู่ระบบสำเร็จและได้รับ JWT Token ที่ระบุ `role: 'admin'`
+   - ทดสอบนำ Token ไปเรียก API ฝั่ง Admin (`GET /admin/models`) ได้รับสถานะ `200 OK`
+**ไฟล์ที่แก้ไข (Affected Files):**
+- `data/aift.sqlite`
+- `CHANGELOG.md`
+
+---
+
 ### 📅 2026-09-23 16:38:00 (Local Time)
 **ประเภท:** `[Fix]` `[Config / Infra]` `[Backend]`  
 **หัวข้อ:** แก้ไขปัญหา Render Deploy ค้างและเกิด Port Scan Timeout (ปรับ Start Script เป็น Production Mode)  
