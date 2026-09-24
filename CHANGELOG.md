@@ -14,6 +14,31 @@
 
 ## 🕒 บันทึกรายการเปลี่ยนแปลง (Change History)
 
+### 📅 2026-09-24 13:35:00 (Local Time)
+**ประเภท:** `[Feature]` `[Backend / API]`  
+**หัวข้อ:** เพิ่มโมดูลประวัติและค้นหารายการธุรกรรมรวม (`TransactionsModule`) และ Endpoint Export CSV  
+**ปัญหาหรือความต้องการ (Issue / Requirement):**
+- พัฒนาฟีเจอร์ที่ 1 ตาม Roadmap เพื่อรวมข้อมูลรายรับ-รายจ่าย ค้นหาย้อนหลัง และส่งออกข้อมูลเป็น CSV สำหรับผู้ใช้
+**สิ่งที่แก้ไข (Changes Detail):**
+1. **`TransactionsService` (`src/transactions/transactions.service.ts`):**
+   - รวมข้อมูลจาก `Expense` และ `Income` ตาม `userId`
+   - รองรับตัวกรอง: `keyword`, `type` (all/expense/income), `category`, `startDate`, `endDate`, `page`, `limit`
+   - คำนวณสรุปยอด: `totalIncome`, `totalExpense`, `netBalance`, และดึง Distinct Categories
+   - สร้างฟังก์ชัน `generateCsv()` พร้อม UTF-8 BOM (`\uFEFF`) ป้องกันปัญหาภาษาไทยเพี้ยนใน MS Excel
+2. **`TransactionsController` (`src/transactions/transactions.controller.ts`):**
+   - ให้บริการ `GET /transactions` สำหรับ Pagination & Search
+   - ให้บริการ `GET /transactions/export` ดาวน์โหลดไฟล์ CSV โดยตรง
+3. **`AppModule` (`src/app.module.ts`):** นำเข้าและลงทะเบียน `TransactionsModule`
+4. **ทดสอบ Build & Test:** รัน `npm run build` และ `npm test` ผ่านสมบูรณ์ 100%
+**ไฟล์ที่แก้ไข (Affected Files):**
+- `src/transactions/transactions.service.ts`
+- `src/transactions/transactions.controller.ts`
+- `src/transactions/transactions.module.ts`
+- `src/app.module.ts`
+- `CHANGELOG.md`
+
+---
+
 ### 📅 2026-09-24 11:47:00 (Local Time)
 **ประเภท:** `[Data / Auth]` `[Backend / Security]`  
 **หัวข้อ:** กำหนดสิทธิ์บัญชีผู้ใช้ `aingkharat` ให้เป็น Admin (`role: 'admin'`)  

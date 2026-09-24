@@ -15,6 +15,7 @@ import { Budget } from './budgets/entities/budget.entity';
 import { BudgetsModule } from './budgets/budgets.module';
 import { AuthModule } from './auth/auth.module';
 import { AdminModule } from './admin/admin.module';
+import { TransactionsModule } from './transactions/transactions.module';
 import { User } from './auth/entities/user.entity';
 
 @Module({
@@ -89,6 +90,7 @@ import { User } from './auth/entities/user.entity';
     IncomeModule,
     AiModule,
     BudgetsModule,
+    TransactionsModule,
   ],
   controllers: [AppController],
   providers: [AppService],
