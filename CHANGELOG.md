@@ -14,6 +14,90 @@
 
 ## 🕒 บันทึกรายการเปลี่ยนแปลง (Change History)
 
+### 📅 2026-09-25 12:20:00 (Local Time)
+**ประเภท:** `[Fix / Bug]` `[Backend / AI]`  
+**หัวข้อ:** แก้ไขการสกัด JSON รองรับ Nested Objects ใน Gemini AI และปรับปรุงระบบ Fallback ให้ปลอดภัยต่อพยัญชนะภาษาไทย  
+**ปัญหาหรือความต้องการ (Issue / Requirement):**
+- ฟังก์ชัน `generateAndParseJSON` เดิมใช้ Regex แบบ non-greedy ทำให้เมื่อ AI ส่ง JSON ที่มี nested array `items: [{ ... }]` ตัว Regex จะตัดจบที่เครื่องหมาย `}` แรก ทำให้ JSON ขาดตอนและเกิด JSON parse error
+- ใน `fallbackExtractExpense` และ `fallbackExtractIncome` เดิมมีการแปลงตัวอักษรแป้นพิมพ์ไทยแบบ global ทำให้ตัว 'ค', 'ต', 'จ' ในชื่อรายการเพี้ยนได้
+**สิ่งที่แก้ไข (Changes Detail):**
+1. **JSON Parser Robustness (`src/ai/ai.service.ts`):**
+   - ค้นหาขอบเขต JSON ด้วย `indexOf('{')` และ `lastIndexOf('}')` เพื่อให้ได้ JSON Object ตัวนอกสุดที่สมบูรณ์เสมอ ไม่ถูกตัดจบที่ nested object
+2. **Safe Thai Number Replacement (`src/ai/ai.service.ts`):**
+   - เพิ่มฟังก์ชัน `fixThaiKeyboardNumbers` แปลงเฉพาะตัวเลขแป้นพิมพ์ไทยที่เป็น isolated numeric token (เช่น `ถจ` -> `50`) และไม่แตะต้องพยัญชนะในคำภาษาไทย
+   - เพิ่มคีย์เวิร์ดหมวดหมู่ "บันเทิง" (เช่น กาชา, เกม, หนัง, ตั๋ว) ใน Fallback Expense Parser
+3. **Unit Tests (`src/ai/ai.service.spec.ts`):**
+   - เพิ่มชุดทดสอบยืนยันว่าคำว่า "กาชา 200" และ "ข้าว 50" จะไม่ถูกดัดแปลงพยัญชนะ และจัดหมวดหมู่ได้อย่างถูกต้อง (16/16 tests passed)
+**ไฟล์ที่แก้ไข (Affected Files):**
+- `src/ai/ai.service.ts`
+- `src/ai/ai.service.spec.ts`
+- `CHANGELOG.md`
+
+
+### 📅 2026-09-25 12:05:00 (Local Time)
+**ประเภท:** `[Security / Architecture]` `[Backend / AI]`  
+**หัวข้อ:** ตรวจสอบและบังคับใช้ระบบแยกข้อมูลหมวดหมู่ระหว่างผู้ใช้ 100% (Strict Multi-Tenant Isolation) และส่งต่อหมวดหมู่ใหม่เข้าสู่ System Prompt ของ Gemini AI แบบ Dynamic  
+**ปัญหาหรือความต้องการ (Issue / Requirement):**
+1. ตรวจสอบให้มั่นใจว่าหมวดหมู่ที่ผู้ใช้เห็นจะต้องมีเฉพาะ "หมวดหมู่หลักของระบบ (Default Categories)" และ "หมวดหมู่ที่ตนเองสร้าง (Custom Categories)" เท่านั้น **ห้ามเห็นหมวดหมู่ของผู้ใช้คนอื่นเด็ดขาด**
+2. ตรวจสอบและยืนยันว่าเมื่อผู้ใช้สร้างหมวดหมู่ใหม่ขึ้นมา Gemini AI จะเห็นและจัดหมวดหมู่ให้ตรงกับหมวดหมู่ใหม่ได้หรือไม่
+**สิ่งที่แก้ไข (Changes Detail):**
+1. **Multi-Tenant Data Isolation (`src/categories/categories.service.ts`):**
+   - คำสั่งคิวรีใน `findAll(userId)` กำหนดเงื่อนไขจัดกลุ่มแบบรัดกุม:
+     ```sql
+     WHERE (category.isDefault = true AND (category.userId IS NULL OR category.userId = 0))
+        OR (category.isDefault = false AND category.userId = :userId)
+     ```
+   - ป้องกันการมองเห็นหมวดหมู่ของ User อื่น 100% ทั้งในระดับ API Endpoint และ Database Query
+   - ฟังก์ชัน `update` และ `delete` ล็อกสิทธิ์ตรวจสอบ `category.isDefault || category.userId !== userId` เพื่อป้องกันการแก้ไข/ลบหมวดหมู่ข้ามผู้ใช้
+2. **Dynamic AI Category Prompting (`src/ai/ai.service.ts` & `src/expenses/expenses.service.ts`):**
+   - ใน `processChat(text, userId)` และ `processReceiptImage(base64, mimeType, userId)` จะดึงรายการหมวดหมู่ที่เป็นของ user คนนั้นจริง ๆ ผ่าน `categoriesService.findAll(userId)` ก่อนเรียก AI ทุกครั้ง
+   - `AiService.extractExpenseData` รวมหมวดหมู่เริ่มต้น + หมวดหมู่ของ user (`mergedCategories`) แล้วฉีดเข้า Prompt ของ Gemini:
+     `Categories: อาหาร, เครื่องดื่ม, ..., [หมวดหมู่ใหม่ของผู้ใช้]`
+     ทำให้ AI รับรู้และจัดหมวดหมู่ลงในหมวดหมู่ที่สร้างใหม่ได้ทันที
+   - อัปเกรด `fallbackExtractExpense` ให้สามารถจับคู่ชื่อหมวดหมู่ใหม่ได้ด้วย แม้ในกรณีที่ AI ขัดข้องหรือโควตาเต็ม
+**ไฟล์ที่แก้ไข (Affected Files):**
+- `aift-backend/src/categories/categories.service.ts`
+- `aift-backend/src/expenses/expenses.service.ts`
+- `aift-backend/src/ai/ai.service.ts`
+- `aift-backend/CHANGELOG.md`
+
+**ประเภท:** `[Feature / Backend]` `[API / DB]`  
+**หัวข้อ:** เพิ่มระบบ Backend จัดการหมวดหมู่ค่าใช้จ่าย (Custom Category Service, Controller, Entity & AI Integration) พร้อมระบบตรวจจับความปลอดภัยก่อนลบ  
+**ปัญหาหรือความต้องการ (Issue / Requirement):**
+- รองรับการสร้าง/แก้ไข/ลบหมวดหมู่ของผู้ใช้เอง (Custom Categories)
+- ป้องกันการลบหมวดหมู่เริ่มต้น (Default Categories)
+- ป้องกันการลบหมวดหมู่ที่มีรายการค่าใช้จ่ายผูกอยู่ (Safety Check)
+- ซิงค์ชื่อหมวดหมู่ที่แก้ไขไปยังตาราง `expenses` และ `budgets` โดยอัตโนมัติ
+- ส่งต่อหมวดหมู่ของผู้ใช้ไปยัง System Prompt ของ Gemini AI เพื่อให้ AI จำแนกหมวดหมู่ที่กำหนดเองได้
+**สิ่งที่แก้ไข (Changes Detail):**
+1. **Category Entity (`src/categories/entities/category.entity.ts`):**
+   - ฟิลด์ `id`, `name`, `icon`, `color`, `isDefault`, `userId`, `createdAt`, `updatedAt`
+2. **DTOs (`src/categories/dto/category.dto.ts`):**
+   - `CreateCategoryDto` (name, icon, color) และ `UpdateCategoryDto`
+3. **CategoriesService (`src/categories/categories.service.ts`):**
+   - `findAll(userId)`: คืนค่าหมวดหมู่พร้อมนับ `expenseCount` และคำนวณ `totalExpense`
+   - `create(userId, dto)`: ตรวจสอบความซ้ำซ้อนของชื่อหมวดหมู่และบันทึก
+   - `update(userId, id, dto)`: ซิงค์ชื่อหมวดหมู่ใหม่ไปยัง `expenses` และ `budgets`
+   - `delete(userId, id)`: ตรวจสอบว่า `expenseCount > 0` หรือไม่ หากมีจะ throw `BadRequestException`
+4. **CategoriesController (`src/categories/categories.controller.ts`):**
+   - Endpoints `GET`, `POST`, `PATCH`, `DELETE /categories` คุ้มครองด้วย `JwtAuthGuard`
+5. **AI Service Integration (`src/ai/ai.service.ts`):**
+   - ดึงหมวดหมู่ custom ของ user เข้าไปใน prompt สำหรับ Gemini และ fallback logic
+6. **Unit Tests (`src/categories/categories.service.spec.ts`):**
+   - ครอบคลุมการทำงาน CRUD และเงื่อนไข Safety Delete ทั้งหมด
+**ไฟล์ที่แก้ไข (Affected Files):**
+- `aift-backend/src/categories/entities/category.entity.ts`
+- `aift-backend/src/categories/dto/category.dto.ts`
+- `aift-backend/src/categories/categories.service.ts`
+- `aift-backend/src/categories/categories.controller.ts`
+- `aift-backend/src/categories/categories.module.ts`
+- `aift-backend/src/categories/categories.service.spec.ts`
+- `aift-backend/src/app.module.ts`
+- `aift-backend/src/ai/ai.service.ts`
+- `aift-backend/src/expenses/expenses.service.ts`
+- `aift-backend/src/expenses/expenses.module.ts`
+- `aift-backend/CHANGELOG.md`
+
 ### 📅 2026-09-25 10:49:00 (Local Time)
 **ประเภท:** `[Feature / AI]` `[Backend / API]`  
 **หัวข้อ:** พัฒนาระบบสกัดหลายรายการพร้อมกัน (Multi-Item Batch Parsing) และ Endpoint `POST /expenses/batch`  

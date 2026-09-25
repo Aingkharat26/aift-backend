@@ -35,22 +35,25 @@ export class AiService implements OnModuleInit {
     }
   }
 
-  async extractExpenseData(text: string): Promise<any> {
+  async extractExpenseData(text: string, customCategories: string[] = []): Promise<any> {
     const logLabel = `[AI Process] "${text.substring(0, 20)}${text.length > 20 ? '...' : ''}"`;
     console.time(logLabel);
 
+    const baseCategories = ['อาหาร', 'เครื่องดื่ม', 'เดินทาง', 'ช้อปปิ้ง', 'บันเทิง', 'สุขภาพ', 'บิล', 'สัตว์เลี้ยง', 'อื่นๆ'];
+    const mergedCategories = Array.from(new Set([...baseCategories, ...customCategories.filter(Boolean)]));
+
     const prompt = `You are an AI Finance Tracker assistant. Your job is to extract expense information from Thai or English text.
-  Categories: อาหาร, เครื่องดื่ม, เดินทาง, ช้อปปิ้ง, บันเทิง, สุขภาพ, บิล, สัตว์เลี้ยง, อื่นๆ
+  Categories: ${mergedCategories.join(', ')}
 
   STRICT RULES:
   1. The text can contain ONE or MULTIPLE expense items (e.g. "กินข้าวเที่ยง 65 กาแฟ 50 เติมน้ำมัน 800").
   2. For EACH expense item found in the text, extract:
      - "item": clean name of expense (e.g. "ข้าวเที่ยง", "กาแฟ", "ค่าน้ำมัน")
      - "amount": numeric value (e.g. 65, 50, 800)
-     - "category": the closest category among [อาหาร, เครื่องดื่ม, เดินทาง, ช้อปปิ้ง, บันเทิง, สุขภาพ, บิล, สัตว์เลี้ยง, อื่นๆ]
+     - "category": the closest category among [${mergedCategories.join(', ')}]
   3. If the text mentions pets (cats, dogs, pet food, sand, toys), use "สัตว์เลี้ยง".
   4. If amount is not clearly stated for an item, use 0.
-  5. Keyboard Fix: If "ถจ" appear, it means "50", "ค" means "8", "ต" means "9".
+  5. Keyboard Fix: If the amount contains mistyped Thai number keys (e.g. "ถจ" means 50), interpret it as numeric digits for the amount only. NEVER alter Thai consonants in item names (e.g. "ข้าว", "กาชา", "ค่าน้ำ", "ต้มยำ").
   6. If the input text is gibberish, nonsense, or contains no clear expense intent, 
      set "action" to "invalid_input" and "items" to [].
   
@@ -88,7 +91,7 @@ export class AiService implements OnModuleInit {
         }
 
         if (parsedData.action === 'invalid_input' || items.length === 0) {
-          const fallback = this.fallbackExtractExpense(text);
+          const fallback = this.fallbackExtractExpense(text, customCategories);
           if (fallback) {
             console.timeEnd(logLabel);
             return fallback;
@@ -107,7 +110,7 @@ export class AiService implements OnModuleInit {
         };
       } catch (e: any) {
         if (e.message === 'AI_COULD_NOT_UNDERSTAND') {
-          const fallback = this.fallbackExtractExpense(text);
+          const fallback = this.fallbackExtractExpense(text, customCategories);
           if (fallback) {
             console.timeEnd(logLabel);
             return fallback;
@@ -120,7 +123,7 @@ export class AiService implements OnModuleInit {
       }
     }
 
-    const fallback = this.fallbackExtractExpense(text);
+    const fallback = this.fallbackExtractExpense(text, customCategories);
     if (fallback) {
       console.timeEnd(logLabel);
       return fallback;
@@ -131,14 +134,21 @@ export class AiService implements OnModuleInit {
     throw new Error('AI_COULD_NOT_UNDERSTAND');
   }
 
-  async extractExpenseFromReceipt(base64: string, mimeType: string): Promise<any> {
+  async extractExpenseFromReceipt(
+    base64: string,
+    mimeType: string,
+    customCategories: string[] = [],
+  ): Promise<any> {
+    const baseCategories = ['อาหาร', 'เครื่องดื่ม', 'เดินทาง', 'ช้อปปิ้ง', 'บันเทิง', 'สุขภาพ', 'บิล', 'สัตว์เลี้ยง', 'อื่นๆ'];
+    const mergedCategories = Array.from(new Set([...baseCategories, ...customCategories.filter(Boolean)]));
+
     const prompt = `You are an AI Finance Tracker assistant. Your job is to extract expense information from a RECEIPT image (Thai or English).
-  Categories: อาหาร, เครื่องดื่ม, เดินทาง, ช้อปปิ้ง, บันเทิง, สุขภาพ, บิล, สัตว์เลี้ยง, อื่นๆ
+  Categories: ${mergedCategories.join(', ')}
 
   STRICT RULES:
   1. "item" = ชื่อร้าน/ร้านค้า (store/merchant name) เช่น "7-Eleven", "ร้านกาแฟ" — not a single product line.
   2. "amount" = ยอดรวมทั้งใบเสร็จ (TOTAL/GRAND TOTAL/รวมทั้งสิ้น) — the final total, not each line item.
-  3. Pick the category that best fits the store (e.g. ร้านอาหาร→อาหาร, ร้านกาแฟ→เครื่องดื่ม, ปั๊มน้ำมัน→เดินทาง, ซูเปอร์มาเก็ต→ช้อปปิ้ง).
+  3. Pick the category that best fits the store among [${mergedCategories.join(', ')}].
   4. If the image is not a receipt, is blurry, or has no clear total, set "action" to "invalid_input" and "item" to "unknown".
 
   Return ONLY a JSON object like: {"item": string, "amount": number, "category": string, "action": "record_expense"}`;
@@ -154,8 +164,13 @@ export class AiService implements OnModuleInit {
           { text: prompt },
         ]);
         const text = result.response.text().trim();
-        const jsonMatch = /({[\s\S]*?})/.exec(text);
-        const parsedData = JSON.parse(jsonMatch ? jsonMatch[1] : text);
+        const firstBrace = text.indexOf('{');
+        const lastBrace = text.lastIndexOf('}');
+        const cleanJson =
+          firstBrace !== -1 && lastBrace > firstBrace
+            ? text.substring(firstBrace, lastBrace + 1)
+            : text;
+        const parsedData = JSON.parse(cleanJson);
 
         if (
           parsedData.action === 'invalid_input' ||
@@ -252,7 +267,7 @@ export class AiService implements OnModuleInit {
   1. Extract the SPECIFIC source of income (e.g., "เงินเดือน", "ขายของ", "แม่ให้มา").
   2. If the user only enters an amount or mentions generic income without a specific source (e.g., "500", "500 บาท", "รายรับ 500", "ได้เงิน 500"), set "source" to "รายรับทั่วไป" and extract the amount.
   3. If amount is not clearly stated, use 0.
-  4. Keyboard Fix: If "ถจ" appear, it means "50", "ค" means "8", "ต" means "9".
+  4. Keyboard Fix: If the amount contains mistyped Thai number keys (e.g. "ถจ" means 50), interpret it as numeric digits for the amount only. NEVER alter Thai consonants in source names.
   5. DO NOT set "invalid_input" if there is a number or money amount in the text. Treat it as valid income.
   6. Only if the input text has NO numbers and NO meaningful words at all, set "action" to "invalid_input" and "source" to "unknown".
   
@@ -300,11 +315,18 @@ export class AiService implements OnModuleInit {
     throw new Error('AI_COULD_NOT_UNDERSTAND');
   }
 
-  private fallbackExtractIncome(text: string): { source: string; amount: number; action: string } | null {
-    const thaiToEngMap: Record<string, string> = {
+  private fixThaiKeyboardNumbers(val: string): string {
+    if (!val) return '';
+    const thaiNumMap: Record<string, string> = {
       'ๅ': '1', 'ภ': '4', 'ถ': '5', 'ุ': '6', 'ึ': '7', 'ค': '8', 'ต': '9', 'จ': '0',
     };
-    const normalized = text.split('').map(c => thaiToEngMap[c] || c).join('');
+    return val.replace(/(^|\s)([ๅภถุึคตจ]+)(?=\s|$|บาท|บ\.)/g, (match, prefix, numToken) => {
+      return prefix + numToken.split('').map((c: string) => thaiNumMap[c] || c).join('');
+    });
+  }
+
+  private fallbackExtractIncome(text: string): { source: string; amount: number; action: string } | null {
+    const normalized = this.fixThaiKeyboardNumbers(text);
     const numMatch = normalized.match(/(\d+[\d,]*(?:\.\d+)?)/);
     if (!numMatch) return null;
 
@@ -324,17 +346,17 @@ export class AiService implements OnModuleInit {
     return { source, amount, action: 'record_income' };
   }
 
-  private fallbackExtractExpense(text: string): {
+  private fallbackExtractExpense(
+    text: string,
+    customCategories: string[] = [],
+  ): {
     item: string;
     amount: number;
     category: string;
     action: string;
     items: Array<{ item: string; amount: number; category: string }>;
   } | null {
-    const thaiToEngMap: Record<string, string> = {
-      'ๅ': '1', 'ภ': '4', 'ถ': '5', 'ุ': '6', 'ึ': '7', 'ค': '8', 'ต': '9', 'จ': '0',
-    };
-    const normalized = text.split('').map(c => thaiToEngMap[c] || c).join('');
+    const normalized = this.fixThaiKeyboardNumbers(text);
 
     // Try detecting multiple item-amount pairs (e.g. "ข้าว 50 กาแฟ 40")
     const regex = /([^\d,]+?)\s*(\d+[\d,]*(?:\.\d+)?)\s*(?:บาท|บ\.|baht)?/g;
@@ -347,13 +369,27 @@ export class AiService implements OnModuleInit {
           const amt = parseFloat(m[2].replace(/,/g, ''));
           if (!name) name = 'รายจ่ายทั่วไป';
           let cat = 'อื่นๆ';
-          if (/ข้าว|อาหาร|ก๋วยเตี๋ยว|ขนม|ผัด|ต้ม|ยำ|แกง/i.test(name)) cat = 'อาหาร';
-          else if (/กาแฟ|ชา|น้ำ|นม|เบียร์|ไวน์/i.test(name)) cat = 'เครื่องดื่ม';
-          else if (/น้ำมัน|รถ|บีทีเอส|mrt|แท็กซี่|วิน|เดินทาง/i.test(name)) cat = 'เดินทาง';
-          else if (/เสื้อ|กางเกง|ของ|ห้าง|ช้อป/i.test(name)) cat = 'ช้อปปิ้ง';
-          else if (/แมว|หมา|สัตว์/i.test(name)) cat = 'สัตว์เลี้ยง';
-          else if (/ยา|หมอ|คลินิก|โรงพยาบาล/i.test(name)) cat = 'สุขภาพ';
-          else if (/ค่าไฟ|ค่าน้ำ|ค่าเน็ต|บิล/i.test(name)) cat = 'บิล';
+
+          // First check custom categories
+          for (const custom of customCategories) {
+            if (custom && name.toLowerCase().includes(custom.toLowerCase())) {
+              cat = custom;
+              break;
+            }
+          }
+
+          // Then check default category keywords if still default
+          if (cat === 'อื่นๆ') {
+            if (/ข้าว|อาหาร|ก๋วยเตี๋ยว|ขนม|ผัด|ต้ม|ยำ|แกง/i.test(name)) cat = 'อาหาร';
+            else if (/กาชา|เกม|หนัง|ภาพยนตร์|ตั๋ว|คอนเสิร์ต|เที่ยว|สตรีม|netflix|เน็ตฟลิกซ์|spotify|youtube/i.test(name)) cat = 'บันเทิง';
+            else if (/กาแฟ|ชา|น้ำ|นม|เบียร์|ไวน์/i.test(name)) cat = 'เครื่องดื่ม';
+            else if (/น้ำมัน|รถ|บีทีเอส|mrt|แท็กซี่|วิน|เดินทาง/i.test(name)) cat = 'เดินทาง';
+            else if (/เสื้อ|กางเกง|ของ|ห้าง|ช้อป/i.test(name)) cat = 'ช้อปปิ้ง';
+            else if (/แมว|หมา|สัตว์/i.test(name)) cat = 'สัตว์เลี้ยง';
+            else if (/ยา|หมอ|คลินิก|โรงพยาบาล/i.test(name)) cat = 'สุขภาพ';
+            else if (/ค่าไฟ|ค่าน้ำ|ค่าเน็ต|บิล/i.test(name)) cat = 'บิล';
+          }
+
           return { item: name, amount: amt, category: cat };
         })
         .filter(i => !isNaN(i.amount) && i.amount > 0);
@@ -385,12 +421,33 @@ export class AiService implements OnModuleInit {
       item = 'รายจ่ายทั่วไป';
     }
 
+    let cat = 'อื่นๆ';
+    // First check custom categories
+    for (const custom of customCategories) {
+      if (custom && item.toLowerCase().includes(custom.toLowerCase())) {
+        cat = custom;
+        break;
+      }
+    }
+
+    // Then check default category keywords if still default
+    if (cat === 'อื่นๆ') {
+      if (/ข้าว|อาหาร|ก๋วยเตี๋ยว|ขนม|ผัด|ต้ม|ยำ|แกง/i.test(item)) cat = 'อาหาร';
+      else if (/กาชา|เกม|หนัง|ภาพยนตร์|ตั๋ว|คอนเสิร์ต|เที่ยว|สตรีม|netflix|เน็ตฟลิกซ์|spotify|youtube/i.test(item)) cat = 'บันเทิง';
+      else if (/กาแฟ|ชา|น้ำ|นม|เบียร์|ไวน์/i.test(item)) cat = 'เครื่องดื่ม';
+      else if (/น้ำมัน|รถ|บีทีเอส|mrt|แท็กซี่|วิน|เดินทาง/i.test(item)) cat = 'เดินทาง';
+      else if (/เสื้อ|กางเกง|ของ|ห้าง|ช้อป/i.test(item)) cat = 'ช้อปปิ้ง';
+      else if (/แมว|หมา|สัตว์/i.test(item)) cat = 'สัตว์เลี้ยง';
+      else if (/ยา|หมอ|คลินิก|โรงพยาบาล/i.test(item)) cat = 'สุขภาพ';
+      else if (/ค่าไฟ|ค่าน้ำ|ค่าเน็ต|บิล/i.test(item)) cat = 'บิล';
+    }
+
     return {
       item,
       amount,
-      category: 'อื่นๆ',
+      category: cat,
       action: 'record_expense',
-      items: [{ item, amount, category: 'อื่นๆ' }],
+      items: [{ item, amount, category: cat }],
     };
   }
 
@@ -406,9 +463,14 @@ export class AiService implements OnModuleInit {
     const response = result.response;
     let jsonText = response.text().trim();
 
-    const jsonMatch = /({[\s\S]*?})/.exec(jsonText);
-    if (jsonMatch) {
-      jsonText = jsonMatch[1];
+    if (jsonText.startsWith('```')) {
+      jsonText = jsonText.replace(/^```(?:json)?\s*/i, '').replace(/```\s*$/i, '').trim();
+    } else {
+      const firstBrace = jsonText.indexOf('{');
+      const lastBrace = jsonText.lastIndexOf('}');
+      if (firstBrace !== -1 && lastBrace !== -1 && lastBrace > firstBrace) {
+        jsonText = jsonText.substring(firstBrace, lastBrace + 1);
+      }
     }
 
     return JSON.parse(jsonText);

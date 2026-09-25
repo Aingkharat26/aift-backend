@@ -6,12 +6,14 @@ import { Expense } from './entities/expense.entity';
 import { AiSummaryCache } from './entities/ai-summary-cache.entity';
 import { AiModule } from '../ai/ai.module';
 import { IncomeModule } from '../income/income.module';
+import { CategoriesModule } from '../categories/categories.module';
 
 @Module({
   imports: [
     TypeOrmModule.forFeature([Expense, AiSummaryCache]),
     AiModule,
     IncomeModule,
+    CategoriesModule,
   ],
   controllers: [ExpensesController],
   providers: [ExpensesService],

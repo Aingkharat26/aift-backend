@@ -54,6 +54,20 @@ describe('AiService', () => {
       expect(result).toBeDefined();
       expect(result.amount).toBe(50);
     });
+
+    it('should NOT alter Thai consonants like ข, ช, ค, ต in words (e.g. ข้าว, กาชา)', () => {
+      const gacha = (aiService as any).fallbackExtractExpense('กาชา 200');
+      expect(gacha).toBeDefined();
+      expect(gacha.item).toBe('กาชา');
+      expect(gacha.amount).toBe(200);
+      expect(gacha.category).toBe('บันเทิง');
+
+      const rice = (aiService as any).fallbackExtractExpense('ข้าว 50');
+      expect(rice).toBeDefined();
+      expect(rice.item).toBe('ข้าว');
+      expect(rice.amount).toBe(50);
+      expect(rice.category).toBe('อาหาร');
+    });
   });
 
   describe('fallbackExtractIncome', () => {

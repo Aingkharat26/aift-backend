@@ -17,6 +17,8 @@ import { AuthModule } from './auth/auth.module';
 import { AdminModule } from './admin/admin.module';
 import { TransactionsModule } from './transactions/transactions.module';
 import { User } from './auth/entities/user.entity';
+import { Category } from './categories/entities/category.entity';
+import { CategoriesModule } from './categories/categories.module';
 
 @Module({
   imports: [
@@ -34,7 +36,7 @@ import { User } from './auth/entities/user.entity';
       useFactory: (configService: ConfigService) => {
         const dbType = configService.get<string>('DB_TYPE', 'sqlite');
         const databaseUrl = configService.get<string>('DATABASE_URL')?.trim();
-        const entities = [Expense, Income, AiSummaryCache, Budget, User];
+        const entities = [Expense, Income, AiSummaryCache, Budget, User, Category];
 
         if (databaseUrl || dbType === 'postgres') {
           const sslRequired =
@@ -91,6 +93,7 @@ import { User } from './auth/entities/user.entity';
     AiModule,
     BudgetsModule,
     TransactionsModule,
+    CategoriesModule,
   ],
   controllers: [AppController],
   providers: [AppService],

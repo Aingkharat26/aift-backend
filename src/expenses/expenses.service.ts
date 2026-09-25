@@ -5,6 +5,7 @@ import { Expense } from './entities/expense.entity';
 import { AiSummaryCache } from './entities/ai-summary-cache.entity';
 import { AiService } from '../ai/ai.service';
 import { IncomeService } from '../income/income.service';
+import { CategoriesService } from '../categories/categories.service';
 
 @Injectable()
 export class ExpensesService {
@@ -15,10 +16,18 @@ export class ExpensesService {
     private aiSummaryCacheRepository: Repository<AiSummaryCache>,
     private aiService: AiService,
     private incomeService: IncomeService,
+    private categoriesService: CategoriesService,
   ) {}
 
   async processChat(text: string, userId: number): Promise<any> {
-    const aiResult = await this.aiService.extractExpenseData(text);
+    let customCats: string[] = [];
+    try {
+      const categories = await this.categoriesService.findAll(userId);
+      customCats = categories.map((c) => c.name);
+    } catch (e) {
+      // ignore
+    }
+    const aiResult = await this.aiService.extractExpenseData(text, customCats);
 
     // If multiple items are detected, return them for user preview/confirmation
     if (aiResult.items && aiResult.items.length > 1) {
@@ -138,9 +147,18 @@ export class ExpensesService {
     mimeType: string,
     userId: number,
   ): Promise<Expense> {
+    let customCats: string[] = [];
+    try {
+      const categories = await this.categoriesService.findAll(userId);
+      customCats = categories.map((c) => c.name);
+    } catch (e) {
+      // ignore
+    }
+
     const aiResult = await this.aiService.extractExpenseFromReceipt(
       base64,
       mimeType,
+      customCats,
     );
 
     const expense = new Expense();
