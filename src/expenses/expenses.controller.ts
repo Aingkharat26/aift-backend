@@ -48,6 +48,25 @@ export class ExpensesController {
     }
   }
 
+  @Post('batch')
+  async saveBatch(
+    @CurrentUser() user: User,
+    @Body('items') items: Array<{ item: string; amount: number; category?: string }>,
+  ) {
+    if (!items || !Array.isArray(items) || items.length === 0) {
+      throw new BadRequestException('Items array is required');
+    }
+
+    try {
+      const result = await this.expensesService.saveBatch(items, user.id);
+      return { success: true, count: result.length, data: result };
+    } catch (error) {
+      throw new InternalServerErrorException(
+        error.message || 'Failed to save batch expenses',
+      );
+    }
+  }
+
   @Post('receipt')
   async processReceipt(
     @CurrentUser() user: User,

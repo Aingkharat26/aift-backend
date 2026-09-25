@@ -14,7 +14,30 @@
 
 ## 🕒 บันทึกรายการเปลี่ยนแปลง (Change History)
 
-### 📅 2026-09-24 13:35:00 (Local Time)
+### 📅 2026-09-25 10:49:00 (Local Time)
+**ประเภท:** `[Feature / AI]` `[Backend / API]`  
+**หัวข้อ:** พัฒนาระบบสกัดหลายรายการพร้อมกัน (Multi-Item Batch Parsing) และ Endpoint `POST /expenses/batch`  
+**ปัญหาหรือความต้องการ (Issue / Requirement):**
+- ต่อยอดระบบสกัดข้อความภาษาธรรมชาติของ AI ให้สามารถตรวจจับและแยกหลายรายการพร้อมกันในประโยคเดียว
+- รองรับการบันทึกรายการหลายรายการเป็นชุด (Batch Saving)
+**สิ่งที่แก้ไข (Changes Detail):**
+1. **`AiService` (`src/ai/ai.service.ts`):**
+   - อัปเกรด Prompt ให้ Gemini ส่งผลลัพธ์เป็น Array `items: [...]` เมื่อพบหลายรายการ
+   - Normalization โครงสร้างข้อมูล รองรับทั้งแบบ single item และ multi-items แบบ Backward Compatible
+   - อัปเกรด `fallbackExtractExpense` ให้สามารถสกัดหลายคู่ข้อความ-จำนวนเงินในกรณีที่ AI ขัดข้อง
+2. **`ExpensesService` (`src/expenses/expenses.service.ts`):**
+   - อัปเดต `processChat` ให้คืนค่า `isBatch: true` เมื่อพบหลายรายการ เพื่อให้ฝั่งหน้าบ้านเปิด Modal ตรวจสอบ
+   - เพิ่มเมธอด `saveBatch(items, userId)` สำหรับบันทึกรายการหลายรายการพร้อมกัน
+3. **`ExpensesController` (`src/expenses/expenses.controller.ts`):**
+   - เพิ่ม Endpoint `POST /expenses/batch` สำหรับรับรายการที่ผู้ใช้ตรวจสอบแล้วมาบันทึกลงฐานข้อมูล
+4. **Unit Tests (`src/ai/ai.service.spec.ts`):**
+   - เพิ่ม Unit Test ครอบคลุมการทำงานของ `fallbackExtractExpense` และ `fallbackExtractIncome`
+**ไฟล์ที่แก้ไข (Affected Files):**
+- `aift-backend/src/ai/ai.service.ts`
+- `aift-backend/src/ai/ai.service.spec.ts`
+- `aift-backend/src/expenses/expenses.service.ts`
+- `aift-backend/src/expenses/expenses.controller.ts`
+- `aift-backend/CHANGELOG.md`
 **ประเภท:** `[Feature]` `[Backend / API]`  
 **หัวข้อ:** เพิ่มโมดูลประวัติและค้นหารายการธุรกรรมรวม (`TransactionsModule`) และ Endpoint Export CSV  
 **ปัญหาหรือความต้องการ (Issue / Requirement):**

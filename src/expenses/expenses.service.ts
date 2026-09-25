@@ -1,4 +1,4 @@
-import { Injectable, NotFoundException } from '@nestjs/common';
+import { BadRequestException, Injectable, NotFoundException } from '@nestjs/common';
 import { InjectRepository } from '@nestjs/typeorm';
 import { Repository } from 'typeorm';
 import { Expense } from './entities/expense.entity';
@@ -17,16 +17,56 @@ export class ExpensesService {
     private incomeService: IncomeService,
   ) {}
 
-  async processChat(text: string, userId: number): Promise<Expense> {
+  async processChat(text: string, userId: number): Promise<any> {
     const aiResult = await this.aiService.extractExpenseData(text);
 
+    // If multiple items are detected, return them for user preview/confirmation
+    if (aiResult.items && aiResult.items.length > 1) {
+      return {
+        isBatch: true,
+        count: aiResult.items.length,
+        items: aiResult.items,
+      };
+    }
+
+    const itemToSave = (aiResult.items && aiResult.items[0]) || {
+      item: aiResult.item,
+      amount: aiResult.amount,
+      category: aiResult.category,
+    };
+
     const expense = new Expense();
-    expense.item = aiResult.item;
-    expense.amount = aiResult.amount;
-    expense.category = aiResult.category;
+    expense.item = itemToSave.item;
+    expense.amount = itemToSave.amount;
+    expense.category = itemToSave.category;
     expense.userId = userId;
 
-    return this.expensesRepository.save(expense);
+    const saved = await this.expensesRepository.save(expense);
+    return {
+      isBatch: false,
+      count: 1,
+      ...saved,
+    };
+  }
+
+  async saveBatch(
+    items: Array<{ item: string; amount: number; category?: string }>,
+    userId: number,
+  ): Promise<Expense[]> {
+    if (!items || !Array.isArray(items) || items.length === 0) {
+      throw new BadRequestException('Items array is required');
+    }
+
+    const expensesToSave: Expense[] = items.map((i) => {
+      const expense = new Expense();
+      expense.item = (i.item || 'รายจ่าย').trim();
+      expense.amount = Number(i.amount) || 0;
+      expense.category = (i.category || 'อื่นๆ').trim();
+      expense.userId = userId;
+      return expense;
+    });
+
+    return this.expensesRepository.save(expensesToSave);
   }
 
   async getDailyExpenses(

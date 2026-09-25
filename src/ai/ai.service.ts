@@ -43,23 +43,51 @@ export class AiService implements OnModuleInit {
   Categories: อาหาร, เครื่องดื่ม, เดินทาง, ช้อปปิ้ง, บันเทิง, สุขภาพ, บิล, สัตว์เลี้ยง, อื่นๆ
 
   STRICT RULES:
-  1. If the text mentions pets (cats, dogs, pet food, sand, toys), use "สัตว์เลี้ยง".
-  2. If amount is not clearly stated, use 0.
-  3. Keyboard Fix: If "ถจ" appear, it means "50", "ค" means "8", "ต" means "9".
-  4. If the input text is gibberish, nonsense, or contains no clear expense intent, 
-     set "action" to "invalid_input" and "item" to "unknown".
+  1. The text can contain ONE or MULTIPLE expense items (e.g. "กินข้าวเที่ยง 65 กาแฟ 50 เติมน้ำมัน 800").
+  2. For EACH expense item found in the text, extract:
+     - "item": clean name of expense (e.g. "ข้าวเที่ยง", "กาแฟ", "ค่าน้ำมัน")
+     - "amount": numeric value (e.g. 65, 50, 800)
+     - "category": the closest category among [อาหาร, เครื่องดื่ม, เดินทาง, ช้อปปิ้ง, บันเทิง, สุขภาพ, บิล, สัตว์เลี้ยง, อื่นๆ]
+  3. If the text mentions pets (cats, dogs, pet food, sand, toys), use "สัตว์เลี้ยง".
+  4. If amount is not clearly stated for an item, use 0.
+  5. Keyboard Fix: If "ถจ" appear, it means "50", "ค" means "8", "ต" means "9".
+  6. If the input text is gibberish, nonsense, or contains no clear expense intent, 
+     set "action" to "invalid_input" and "items" to [].
   
   Text to extract: "${text}"
-  Return ONLY a JSON object like: {"item": string, "amount": number, "category": string, "action": "record_expense"}`;
+  Return ONLY a JSON object formatted as:
+  {
+    "items": [
+      { "item": string, "amount": number, "category": string }
+    ],
+    "action": "record_expense"
+  }`;
 
     for (const modelName of this.modelPriority) {
       try {
         const parsedData = await this.generateAndParseJSON(modelName, prompt);
 
-        if (
-          parsedData.action === 'invalid_input' ||
-          (parsedData.amount === 0 && parsedData.item === 'unknown')
+        let items: Array<{ item: string; amount: number; category: string }> = [];
+        if (Array.isArray(parsedData.items) && parsedData.items.length > 0) {
+          items = parsedData.items.filter(
+            (i: any) => i && typeof i.amount === 'number' && i.amount > 0 && i.item && i.item !== 'unknown'
+          );
+        } else if (
+          parsedData.item &&
+          parsedData.item !== 'unknown' &&
+          typeof parsedData.amount === 'number' &&
+          parsedData.amount > 0
         ) {
+          items = [
+            {
+              item: parsedData.item,
+              amount: parsedData.amount,
+              category: parsedData.category || 'อื่นๆ',
+            },
+          ];
+        }
+
+        if (parsedData.action === 'invalid_input' || items.length === 0) {
           const fallback = this.fallbackExtractExpense(text);
           if (fallback) {
             console.timeEnd(logLabel);
@@ -69,7 +97,14 @@ export class AiService implements OnModuleInit {
         }
 
         console.timeEnd(logLabel);
-        return parsedData;
+        return {
+          action: 'record_expense',
+          items,
+          // for backward compatibility
+          item: items[0].item,
+          amount: items[0].amount,
+          category: items[0].category,
+        };
       } catch (e: any) {
         if (e.message === 'AI_COULD_NOT_UNDERSTAND') {
           const fallback = this.fallbackExtractExpense(text);
@@ -289,11 +324,51 @@ export class AiService implements OnModuleInit {
     return { source, amount, action: 'record_income' };
   }
 
-  private fallbackExtractExpense(text: string): { item: string; amount: number; category: string; action: string } | null {
+  private fallbackExtractExpense(text: string): {
+    item: string;
+    amount: number;
+    category: string;
+    action: string;
+    items: Array<{ item: string; amount: number; category: string }>;
+  } | null {
     const thaiToEngMap: Record<string, string> = {
       'ๅ': '1', 'ภ': '4', 'ถ': '5', 'ุ': '6', 'ึ': '7', 'ค': '8', 'ต': '9', 'จ': '0',
     };
     const normalized = text.split('').map(c => thaiToEngMap[c] || c).join('');
+
+    // Try detecting multiple item-amount pairs (e.g. "ข้าว 50 กาแฟ 40")
+    const regex = /([^\d,]+?)\s*(\d+[\d,]*(?:\.\d+)?)\s*(?:บาท|บ\.|baht)?/g;
+    const matches = Array.from(normalized.matchAll(regex));
+
+    if (matches.length > 1) {
+      const items = matches
+        .map(m => {
+          let name = m[1].replace(/รายจ่าย|ค่า|ซื้อ/g, '').trim();
+          const amt = parseFloat(m[2].replace(/,/g, ''));
+          if (!name) name = 'รายจ่ายทั่วไป';
+          let cat = 'อื่นๆ';
+          if (/ข้าว|อาหาร|ก๋วยเตี๋ยว|ขนม|ผัด|ต้ม|ยำ|แกง/i.test(name)) cat = 'อาหาร';
+          else if (/กาแฟ|ชา|น้ำ|นม|เบียร์|ไวน์/i.test(name)) cat = 'เครื่องดื่ม';
+          else if (/น้ำมัน|รถ|บีทีเอส|mrt|แท็กซี่|วิน|เดินทาง/i.test(name)) cat = 'เดินทาง';
+          else if (/เสื้อ|กางเกง|ของ|ห้าง|ช้อป/i.test(name)) cat = 'ช้อปปิ้ง';
+          else if (/แมว|หมา|สัตว์/i.test(name)) cat = 'สัตว์เลี้ยง';
+          else if (/ยา|หมอ|คลินิก|โรงพยาบาล/i.test(name)) cat = 'สุขภาพ';
+          else if (/ค่าไฟ|ค่าน้ำ|ค่าเน็ต|บิล/i.test(name)) cat = 'บิล';
+          return { item: name, amount: amt, category: cat };
+        })
+        .filter(i => !isNaN(i.amount) && i.amount > 0);
+
+      if (items.length > 0) {
+        return {
+          item: items[0].item,
+          amount: items[0].amount,
+          category: items[0].category,
+          action: 'record_expense',
+          items,
+        };
+      }
+    }
+
     const numMatch = normalized.match(/(\d+[\d,]*(?:\.\d+)?)/);
     if (!numMatch) return null;
 
@@ -310,7 +385,13 @@ export class AiService implements OnModuleInit {
       item = 'รายจ่ายทั่วไป';
     }
 
-    return { item, amount, category: 'อื่นๆ', action: 'record_expense' };
+    return {
+      item,
+      amount,
+      category: 'อื่นๆ',
+      action: 'record_expense',
+      items: [{ item, amount, category: 'อื่นๆ' }],
+    };
   }
 
   private async generateAndParseJSON(modelName: string, prompt: string): Promise<any> {
