@@ -37,8 +37,11 @@ services:
       - DB_USER=postgres
       - DB_PASS=postgres
       - DB_NAME=aift
+      - DB_SSL=false
     env_file:
       - ../.env
+    volumes:
+      - ../src:/app/src
     depends_on:
       - postgres
 

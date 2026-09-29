@@ -14,6 +14,32 @@
 
 ## 🕒 บันทึกรายการเปลี่ยนแปลง (Change History)
 
+### 📅 2026-09-29 11:05:00 (Local Time)
+**ประเภท:** `[Fix / Docker / Backend]` `[Backend]`  
+**หัวข้อ:** แก้ไขปัญหา Endpoint /transactions และ /categories คืนค่า 404 Not Found โดยการ Rebuild Docker Backend Container และเชื่อมโยง Source Volume Mount  
+**ปัญหาหรือความต้องการ (Issue / Requirement):**
+- ผู้ใช้เรียก `http://localhost:3000/transactions?type=all&startDate=2026-09-01&endDate=2026-09-30&page=1&limit=20` แล้วเกิดข้อผิดพลาด `404 (Not Found)`
+**สาเหตุที่แท้จริง (Root Cause):**
+1. Docker Container `aift-backend` รัน Image ตัวเก่าที่ถูก Build ค้างไว้ตั้งแต่ 5 วันก่อน ซึ่งในตอนนั้นยังไม่มี `TransactionsModule` และ `CategoriesModule`
+2. `Docker/docker-compose.yml` เดิมไม่มีการ mount source code (`../src:/app/src`) เข้าคอนเทนเนอร์ ทำให้การเปลี่ยนแปลงโค้ดล่าสุดบนโฮสต์ไม่ถูกนำไปใช้งาน
+3. ตัวแปร `DB_SSL` เดิมถูก default ไว้เป็น `true` ส่งผลให้เมื่อ Rebuild ใหม่ คอนเทนเนอร์ต่อกับ PostgreSQL ใน Docker เน็ตเวิร์กไม่ผ่าน (`The server does not support SSL connections`)
+**สิ่งที่แก้ไข (Changes Detail):**
+1. **Docker Compose Configuration (`Docker/docker-compose.yml`):**
+   - เพิ่ม `volumes: - ../src:/app/src` เพื่อให้ NestJS Watch Mode (`start:dev`) ซิงก์โค้ดจากโฮสต์แบบเรียลไทม์
+   - เพิ่ม Environment Variable `DB_SSL=false` สำหรับ Local Postgres Container
+2. **Database Module Configuration (`src/app.module.ts`):**
+   - ปรับปรุงให้ตรวจสอบ `isLocalHost` อัตโนมัติ (`localhost` หรือ `postgres`) โดยตั้งค่า `DB_SSL` เป็น `false` อัตโนมัติเมื่อเป็นฐานข้อมูลโลคอล
+   - แก้ไขการประกาศตัวแปร `host` ซ้ำ
+3. **Rebuild & Verification:**
+   - สั่ง `docker compose up -d --build backend` สำเร็จเรียบร้อย
+   - ตรวจสอบ Log พบเส้นทาง `Mapped {/transactions, GET}` และ `Mapped {/categories, GET}` ขึ้นระบบเรียบร้อย
+   - ทดสอบส่ง Request ไปยัง `/transactions?...` พบว่า Endpoint ตอบสนองตามปกติ (401 Unauthorized สำหรับ Unauthenticated Request แทนที่จะเป็น 404)
+**ไฟล์ที่แก้ไข (Affected Files):**
+- `aift-backend/Docker/docker-compose.yml`
+- `aift-backend/src/app.module.ts`
+- `aift-backend/CHANGELOG.md`
+- `CHANGELOG.md`
+
 ### 📅 2026-09-25 12:20:00 (Local Time)
 **ประเภท:** `[Fix / Bug]` `[Backend / AI]`  
 **หัวข้อ:** แก้ไขการสกัด JSON รองรับ Nested Objects ใน Gemini AI และปรับปรุงระบบ Fallback ให้ปลอดภัยต่อพยัญชนะภาษาไทย  

@@ -39,8 +39,10 @@ import { CategoriesModule } from './categories/categories.module';
         const entities = [Expense, Income, AiSummaryCache, Budget, User, Category];
 
         if (databaseUrl || dbType === 'postgres') {
+          const host = configService.get<string>('DB_HOST', 'localhost');
+          const isLocalHost = !databaseUrl && (host === 'localhost' || host === 'postgres' || host === '127.0.0.1');
           const sslRequired =
-            configService.get<string>('DB_SSL', 'true') === 'true';
+            configService.get<string>('DB_SSL', isLocalHost ? 'false' : 'true') === 'true';
           if (databaseUrl) {
             console.log(
               `[Database] Connecting to PostgreSQL via DATABASE_URL (${databaseUrl.replace(/:([^@]+)@/, ':****@')})`,
@@ -56,11 +58,10 @@ import { CategoriesModule } from './categories/categories.module';
               },
             };
           }
-          const host = configService.get<string>('DB_HOST', 'localhost');
           console.log(`[Database] Connecting to PostgreSQL at ${host}:${configService.get('DB_PORT', 5432)}`);
           return {
             type: 'postgres',
-            host: configService.get<string>('DB_HOST', 'localhost'),
+            host,
             port: Number(configService.get('DB_PORT', 5432)),
             username: configService.get<string>('DB_USER', 'postgres'),
             password: configService.get<string>('DB_PASS', 'postgres'),
