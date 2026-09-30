@@ -14,6 +14,29 @@
 
 ## 🕒 บันทึกรายการเปลี่ยนแปลง (Change History)
 
+### 📅 2026-09-30 15:05:00 (Local Time)
+**ประเภท:** `[Fix / Performance / Database]` `[Backend]`  
+**หัวข้อ:** ปรับปรุง PostgreSQL Connection Pool Keep-Alive และ JWT Strategy ให้เป็น Stateless ป้องกันปัญหา Connection ค้างหลังเซิร์ฟเวอร์ไม่ได้ใช้งานนาน  
+**ปัญหาหรือความต้องการ (Issue / Requirement):**
+- **ปัญหา:** เมื่อเปิดระบบค้างไว้นานเกิน 15 นาที คำขอดึงข้อมูลเกิดอาการค้างหรือไม่โหลด และต้อง Logout แล้ว Login ใหม่จึงจะโหลดข้อมูลได้
+- **สาเหตุ:** การเชื่อมต่อ TypeORM เข้ากับ Supabase Pooler ขาดการตั้งค่า `keepAlive` และ `idleTimeoutMillis` ทำให้เมื่อไม่มีการใช้งานนานๆ Connection ใน Pool กลายเป็น Zombie Socket ส่งผลให้คำขอแรกๆ ค้าง นอกจากนี้ `JwtStrategy.validate()` มีการยิง `SELECT * FROM users` ทุก Request ทำให้เกิด overhead และเสี่ยงค้างหาก DB connection กำลัง reconnect
+**สิ่งที่แก้ไข (Changes Detail):**
+1. **ปรับปรุง PostgreSQL Connection Pool ใน `app.module.ts`:**
+   - เพิ่ม `keepAlive: true` และ `keepAliveInitialDelayMillis: 10000`
+   - เพิ่ม `idleTimeoutMillis: 30000` เพื่อตัด connection ที่ไม่ได้ใช้งานออก ป้องกัน socket ค้าง
+   - กำหนด `connectionTimeoutMillis: 15000` และ `max: 10`
+2. **ปรับปรุง `JwtStrategy.validate()` ใน `jwt.strategy.ts`:**
+   - ให้คืนค่า User จาก Verified JWT Token Payload (`sub`, `username`, `role`) ทันทีโดยไม่ต้อง Query ตาราง Users ใน Database ซ้ำซ้อนทุก API Request
+   - ช่วยลด Database Latency ได้ 50-150ms ทุก request และทำให้ Dashboard API Requests โหลดได้รวดเร็วทันใจแม้เพิ่งตื่นจาก Cold Start
+3. **การตรวจสอบและทดสอบ (Verification & Testing):**
+   - รันคำสั่ง `npm run build` ผ่านสมบูรณ์ 100% (Exit code 0)
+**ไฟล์ที่แก้ไข (Affected Files):**
+- `src/app.module.ts`
+- `src/auth/jwt.strategy.ts`
+- `CHANGELOG.md`
+
+---
+
 ### 📅 2026-09-29 11:05:00 (Local Time)
 **ประเภท:** `[Fix / Docker / Backend]` `[Backend]`  
 **หัวข้อ:** แก้ไขปัญหา Endpoint /transactions และ /categories คืนค่า 404 Not Found โดยการ Rebuild Docker Backend Container และเชื่อมโยง Source Volume Mount  

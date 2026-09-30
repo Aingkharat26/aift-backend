@@ -43,6 +43,14 @@ import { CategoriesModule } from './categories/categories.module';
           const isLocalHost = !databaseUrl && (host === 'localhost' || host === 'postgres' || host === '127.0.0.1');
           const sslRequired =
             configService.get<string>('DB_SSL', isLocalHost ? 'false' : 'true') === 'true';
+          const postgresPoolExtra = {
+            connectionTimeoutMillis: 15000,
+            max: 10,
+            idleTimeoutMillis: 30000,
+            keepAlive: true,
+            keepAliveInitialDelayMillis: 10000,
+          };
+
           if (databaseUrl) {
             console.log(
               `[Database] Connecting to PostgreSQL via DATABASE_URL (${databaseUrl.replace(/:([^@]+)@/, ':****@')})`,
@@ -53,9 +61,7 @@ import { CategoriesModule } from './categories/categories.module';
               ssl: sslRequired ? { rejectUnauthorized: false } : false,
               entities,
               synchronize: true,
-              extra: {
-                connectionTimeoutMillis: 10000,
-              },
+              extra: postgresPoolExtra,
             };
           }
           console.log(`[Database] Connecting to PostgreSQL at ${host}:${configService.get('DB_PORT', 5432)}`);
@@ -69,6 +75,7 @@ import { CategoriesModule } from './categories/categories.module';
             ssl: sslRequired ? { rejectUnauthorized: false } : false,
             entities,
             synchronize: true,
+            extra: postgresPoolExtra,
           };
         }
         const sqlitePath = configService.get<string>(
